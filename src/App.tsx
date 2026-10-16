@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { buildCommand, modules, type CommandName } from "./testkit";
+import { copyToClipboard } from "./clipboard";
 
 const descriptions: Record<CommandName, string> = {
   coverage: "Generate contract-test coverage through cargo-llvm-cov.",
@@ -23,7 +24,7 @@ export default function App() {
   );
 
   const copy = async () => {
-    await navigator.clipboard.writeText(generated);
+    await copyToClipboard(generated);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1600);
   };
