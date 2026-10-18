@@ -178,3 +178,36 @@ describe("Visual distinction between required and optional settings (#196)", () 
     expect(screen.getByText("Optional")).toBeInTheDocument();
   });
 });
+
+describe("Workflow guidance and input controls", () => {
+  it("shows coverage and audit workflow guidance panels with keyboard-accessible summaries", () => {
+    render(<App />);
+
+    expect(screen.getByRole("heading", { name: /coverage report guide/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /audit workflow tutorial/i })).toBeInTheDocument();
+    expect(screen.getByText(/command length/i)).toBeInTheDocument();
+  });
+
+  it("clears path, function, and ramp fields with dedicated controls", () => {
+    render(<App />);
+
+    const pathInput = screen.getByLabelText(/project or contract path/i);
+    fireEvent.change(pathInput, { target: { value: "./custom/path" } });
+    fireEvent.click(screen.getByRole("button", { name: /clear/i }));
+    expect(pathInput).toHaveValue("");
+
+    fireEvent.click(screen.getByRole("button", { name: "limits" }));
+
+    const fnInput = screen.getByLabelText(/function/i);
+    const rampInput = screen.getByLabelText(/ramp parameter/i);
+
+    fireEvent.change(fnInput, { target: { value: "withdraw" } });
+    fireEvent.change(rampInput, { target: { value: "balances" } });
+
+    fireEvent.click(screen.getAllByRole("button", { name: /clear/i })[0]);
+    expect(fnInput).toHaveValue("");
+
+    fireEvent.click(screen.getAllByRole("button", { name: /clear/i })[0]);
+    expect(rampInput).toHaveValue("");
+  });
+});

@@ -8,6 +8,8 @@ const descriptions: Record<CommandName, string> = {
   audit: "Scan contract sources for common auth, arithmetic, and TTL risks.",
 };
 
+const fieldClasses = "field-input";
+
 export default function App() {
   const [command, setCommand] = useState<CommandName>("coverage");
   const [path, setPath] = useState(".");
@@ -18,6 +20,8 @@ export default function App() {
   const [strict, setStrict] = useState(true);
   const [copied, setCopied] = useState(false);
   const [moduleFilter, setModuleFilter] = useState("");
+  const [coverageGuideOpen, setCoverageGuideOpen] = useState(true);
+  const [auditGuideOpen, setAuditGuideOpen] = useState(true);
 
   const generated = useMemo(
     () => buildCommand({ command, path, format, open, fn, ramp, strict }),
@@ -149,11 +153,25 @@ export default function App() {
               <span>Project or contract path</span>
               <span className="badge badge-required">Required</span>
             </div>
-            <input
-              value={path}
-              onChange={(event) => setPath(event.target.value)}
-              aria-required="true"
-            />
+            <div className="field-with-clear">
+              <input
+                className={fieldClasses}
+                value={path}
+                onChange={(event) => setPath(event.target.value)}
+                aria-label="Project or contract path"
+                aria-required="true"
+              />
+              {path && (
+                <button
+                  type="button"
+                  className="clear-field-button"
+                  onClick={() => setPath("")}
+                  aria-label="Clear"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
           </label>
           {command === "coverage" && <>
             <label>
@@ -181,14 +199,50 @@ export default function App() {
                 <span>Function</span>
                 <span className="badge badge-required">Required</span>
               </div>
-              <input value={fn} onChange={(event) => setFn(event.target.value)} aria-required="true" />
+              <div className="field-with-clear">
+                <input
+                  className={fieldClasses}
+                  value={fn}
+                  onChange={(event) => setFn(event.target.value)}
+                  aria-label="Function"
+                  aria-required="true"
+                />
+                {fn && (
+                  <button
+                    type="button"
+                    className="clear-field-button"
+                    onClick={() => setFn("")}
+                    aria-label="Clear"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
             </label>
             <label>
               <div className="field-header">
                 <span>Ramp parameter</span>
                 <span className="badge badge-required">Required</span>
               </div>
-              <input value={ramp} onChange={(event) => setRamp(event.target.value)} aria-required="true" />
+              <div className="field-with-clear">
+                <input
+                  className={fieldClasses}
+                  value={ramp}
+                  onChange={(event) => setRamp(event.target.value)}
+                  aria-label="Ramp parameter"
+                  aria-required="true"
+                />
+                {ramp && (
+                  <button
+                    type="button"
+                    className="clear-field-button"
+                    onClick={() => setRamp("")}
+                    aria-label="Clear"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
             </label>
           </div>}
           {command === "audit" && <label className="check">
@@ -198,8 +252,65 @@ export default function App() {
             </span>
             <span className="badge badge-optional">Optional</span>
           </label>}
-          <div className="output"><code>{generated}</code><button onClick={copy}>{copied ? "Copied" : "Copy"}</button></div>
+          <div className="output-wrap">
+            <div className="output"><code>{generated}</code><button onClick={copy}>{copied ? "Copied" : "Copy"}</button></div>
+            <div className="command-meta" aria-live="polite">
+              <span>Command length: {generated.length} characters</span>
+            </div>
+          </div>
         </div>
+      </section>
+
+      <section className="guides" aria-label="Workflow guides">
+        <article className="guide-card">
+          <div className="guide-header">
+            <h3>Coverage report guide</h3>
+            <button
+              type="button"
+              className="guide-toggle"
+              aria-expanded={coverageGuideOpen}
+              aria-controls="coverage-guide-panel"
+              onClick={() => setCoverageGuideOpen((open) => !open)}
+            >
+              {coverageGuideOpen ? "Hide guide" : "Show guide"}
+            </button>
+          </div>
+          {coverageGuideOpen && (
+            <div id="coverage-guide-panel" className="guide-panel">
+              <ol>
+                <li>Start with the local project path so the tool can read the crate and tests in context.</li>
+                <li>Choose HTML output when you want a visual report and open it immediately after generation.</li>
+                <li>Read branch and line coverage together: low execution density usually explains weak confidence more than raw percentages.</li>
+                <li>Use the report to prioritize untested edge cases before shipping a contract update.</li>
+              </ol>
+            </div>
+          )}
+        </article>
+
+        <article className="guide-card">
+          <div className="guide-header">
+            <h3>Audit workflow tutorial</h3>
+            <button
+              type="button"
+              className="guide-toggle"
+              aria-expanded={auditGuideOpen}
+              aria-controls="audit-guide-panel"
+              onClick={() => setAuditGuideOpen((open) => !open)}
+            >
+              {auditGuideOpen ? "Hide tutorial" : "Show tutorial"}
+            </button>
+          </div>
+          {auditGuideOpen && (
+            <div id="audit-guide-panel" className="guide-panel">
+              <ol>
+                <li>Point the audit at the contract source directory or workspace root most relevant to the change.</li>
+                <li>Review auth and storage access warnings first; they often explain failure modes and privilege issues.</li>
+                <li>Use the strict mode toggle when you want warning-level findings to block release readiness.</li>
+                <li>Pair each finding with a focused regression test before finalizing the deployment checklist.</li>
+              </ol>
+            </div>
+          )}
+        </article>
       </section>
 
       <footer><span>Built for the Stellar developer ecosystem.</span><span>Apache-2.0</span></footer>
