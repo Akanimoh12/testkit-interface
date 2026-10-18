@@ -22,6 +22,17 @@ export const modules = [
 
 const quote = (value: string) => (value.includes(" ") ? `"${value}"` : value);
 
+/**
+ * Values `buildCommand` substitutes when a field is left empty. Exported so
+ * the workbench can preview the effective command before copying it.
+ */
+export const fallbackValues = {
+  limitsContract: "target/wasm32v1-none/release/contract.wasm",
+  limitsFunction: "batch_payout",
+  limitsRamp: "recipients",
+  auditPath: "./src",
+} as const;
+
 export function buildCommand(options: CommandOptions): string {
   if (options.command === "coverage") {
     return [
@@ -38,17 +49,17 @@ export function buildCommand(options: CommandOptions): string {
     return [
       "soroban-testkit limits",
       "--contract",
-      quote(options.path || "target/wasm32v1-none/release/contract.wasm"),
+      quote(options.path || fallbackValues.limitsContract),
       "--fn",
-      options.fn || "batch_payout",
+      options.fn || fallbackValues.limitsFunction,
       "--ramp",
-      options.ramp || "recipients",
+      options.ramp || fallbackValues.limitsRamp,
     ].join(" ");
   }
 
   return [
     "soroban-testkit audit",
-    quote(options.path || "./src"),
+    quote(options.path || fallbackValues.auditPath),
     options.strict && "--strict",
   ]
     .filter(Boolean)
@@ -80,11 +91,9 @@ export function formatCommandLine(
   }
 
   if (options.command === "limits") {
-    const contractPath = quote(
-      options.path || "target/wasm32v1-none/release/contract.wasm",
-    );
-    const fn = options.fn || "batch_payout";
-    const ramp = options.ramp || "recipients";
+    const contractPath = quote(options.path || fallbackValues.limitsContract);
+    const fn = options.fn || fallbackValues.limitsFunction;
+    const ramp = options.ramp || fallbackValues.limitsRamp;
 
     return [
       "soroban-testkit limits \\",
@@ -95,7 +104,7 @@ export function formatCommandLine(
   }
 
   // audit
-  const auditPath = quote(options.path || "./src");
+  const auditPath = quote(options.path || fallbackValues.auditPath);
   if (options.strict) {
     return [
       "soroban-testkit audit \\",
@@ -105,6 +114,187 @@ export function formatCommandLine(
   }
 
   return ["soroban-testkit audit \\", `  ${auditPath}`].join("\n");
+}
+
+export interface EffectiveDefaultRow {
+  key: "path" | "fn" | "ramp";
+  label: string;
+  input: string;
+  value: string;
+  applied: boolean;
+}
+
+/**
+ * Lists the fields of the active workflow whose empty input falls back to a
+ * default, with the value the generated command will actually use.
+ */
+export function effectiveDefaults(options: CommandOptions): EffectiveDefaultRow[] {
+  if (options.command === "limits") {
+    return [
+      {
+        key: "path",
+        label: "Contract artifact",
+        input: options.path,
+        value: options.path || fallbackValues.limitsContract,
+        applied: options.path === "",
+      },
+      {
+        key: "fn",
+        label: "Function",
+        input: options.fn,
+        value: options.fn || fallbackValues.limitsFunction,
+        applied: options.fn === "",
+      },
+      {
+        key: "ramp",
+        label: "Ramp parameter",
+        input: options.ramp,
+        value: options.ramp || fallbackValues.limitsRamp,
+        applied: options.ramp === "",
+      },
+    ];
+  }
+
+  if (options.command === "audit") {
+    return [
+      {
+        key: "path",
+        label: "Project path",
+        input: options.path,
+        value: options.path || fallbackValues.auditPath,
+        applied: options.path === "",
+      },
+    ];
+  }
+
+  return [];
+}
+
+export interface SettingSummaryRow {
+  label: string;
+  value: string;
+}
+
+/**
+ * Human-readable recap of the settings the active workflow will run with.
+ * Falls back to the same defaults `buildCommand` applies, marked "(default)".
+ */
+export function summarizeConfiguration(
+  options: CommandOptions,
+): SettingSummaryRow[] {
+  if (options.command === "coverage") {
+    return [
+      { label: "Project or contract path", value: options.path || "(omitted)" },
+      { label: "Report format", value: options.format },
+      { label: "Open report when complete", value: options.open ? "On" : "Off" },
+    ];
+  }
+
+  if (options.command === "limits") {
+    return [
+      {
+        label: "Contract artifact",
+        value: options.path || `${fallbackValues.limitsContract} (default)`,
+      },
+      {
+        label: "Function",
+        value: options.fn || `${fallbackValues.limitsFunction} (default)`,
+      },
+      {
+        label: "Ramp parameter",
+        value: options.ramp || `${fallbackValues.limitsRamp} (default)`,
+      },
+    ];
+  }
+
+  return [
+    {
+      label: "Project path",
+      value: options.path || `${fallbackValues.auditPath} (default)`,
+    },
+    { label: "Fail on warnings", value: options.strict ? "On" : "Off" },
+  ];
+}
+
+export interface ComparisonRow {
+  key: string;
+  label: string;
+  a: string;
+  b: string;
+  changed: boolean;
+}
+
+/**
+ * Compares two configurations setting by setting. Rows are included when the
+ * setting applies to either side; sides that do not use the setting read
+ * "n/a" and empty values read "(empty)".
+ */
+export function compareConfigurations(
+  a: CommandOptions,
+  b: CommandOptions,
+): ComparisonRow[] {
+  const usesCoverage = a.command === "coverage" || b.command === "coverage";
+  const usesLimits = a.command === "limits" || b.command === "limits";
+  const usesAudit = a.command === "audit" || b.command === "audit";
+
+  const fields: Array<{
+    key: string;
+    label: string;
+    applicable: boolean;
+    value: (options: CommandOptions) => string;
+  }> = [
+    { key: "command", label: "Workflow", applicable: true, value: (o) => o.command },
+    {
+      key: "path",
+      label: "Project or contract path",
+      applicable: true,
+      value: (o) => o.path || "(empty)",
+    },
+    {
+      key: "format",
+      label: "Report format",
+      applicable: usesCoverage,
+      value: (o) => (o.command === "coverage" ? o.format : "n/a"),
+    },
+    {
+      key: "open",
+      label: "Open report when complete",
+      applicable: usesCoverage,
+      value: (o) => (o.command === "coverage" ? (o.open ? "On" : "Off") : "n/a"),
+    },
+    {
+      key: "fn",
+      label: "Function",
+      applicable: usesLimits,
+      value: (o) => (o.command === "limits" ? o.fn || "(empty)" : "n/a"),
+    },
+    {
+      key: "ramp",
+      label: "Ramp parameter",
+      applicable: usesLimits,
+      value: (o) => (o.command === "limits" ? o.ramp || "(empty)" : "n/a"),
+    },
+    {
+      key: "strict",
+      label: "Fail on warnings",
+      applicable: usesAudit,
+      value: (o) => (o.command === "audit" ? (o.strict ? "On" : "Off") : "n/a"),
+    },
+  ];
+
+  return fields
+    .filter((field) => field.applicable)
+    .map((field) => {
+      const aValue = field.value(a);
+      const bValue = field.value(b);
+      return {
+        key: field.key,
+        label: field.label,
+        a: aValue,
+        b: bValue,
+        changed: aValue !== bValue,
+      };
+    });
 }
 
 export interface CliCompatibility {
@@ -143,6 +333,55 @@ export const cliCompatibility: readonly CliCompatibility[] = [
     status: "Upcoming",
     notes:
       "Extended persistent TTL storage simulation, multi-contract cross-call limits ramp, and gas telemetry export.",
+  },
+];
+
+export interface InstallStep {
+  title: string;
+  description: string;
+  command: string;
+}
+
+/**
+ * First-time installation workflow, mirrored from the CLI documentation in
+ * `testkit-blockchain`. Ordered: each step builds on the previous one.
+ */
+export const installationSteps: readonly InstallStep[] = [
+  {
+    title: "Add the WebAssembly target",
+    description:
+      "Testkit probes compiled contracts on the pinned Rust stable toolchain, so the wasm32v1-none target has to be present.",
+    command: "rustup target add wasm32v1-none",
+  },
+  {
+    title: "Install the soroban-testkit CLI",
+    description:
+      "Installs the companion binary from crates.io. From a workspace checkout, install the local crate instead with: cargo install --path crates/cli --locked",
+    command: "cargo install soroban-testkit-cli --locked",
+  },
+  {
+    title: "Install the coverage wrapper",
+    description:
+      "The coverage workflow shells out to cargo-llvm-cov, which Testkit calls but does not bundle. Skip this step if you only use limits or audit.",
+    command: "cargo install cargo-llvm-cov",
+  },
+  {
+    title: "Add the crate to your contract",
+    description:
+      "Adds Testkit as a dev-dependency so contract tests can import the prelude and the focused testing modules.",
+    command: "cargo add --dev soroban-testkit",
+  },
+  {
+    title: "Verify the installation",
+    description:
+      "Confirms the binary resolves on your PATH and lists the supported subcommands.",
+    command: "soroban-testkit --help",
+  },
+  {
+    title: "Build your first command",
+    description:
+      "The workbench below generates coverage, limits, and audit commands, previews every default that will be applied, and copies the exact line to your terminal.",
+    command: "soroban-testkit coverage . --format html --open",
   },
 ];
 

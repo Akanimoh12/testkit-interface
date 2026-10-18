@@ -2,8 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   buildCommand,
   cliCompatibility,
+  compareConfigurations,
+  effectiveDefaults,
   formatCommandLine,
+  installationSteps,
   localFileGuides,
+  summarizeConfiguration,
+  type CommandOptions,
 } from "./testkit";
 
 describe("buildCommand", () => {
@@ -191,6 +196,223 @@ describe("localFileGuides", () => {
       expect(guide.offlineGuarantee).toContain("offline");
       expect(guide.resolvedPathExample("test-path")).toBeTruthy();
     }
+  });
+});
+
+const baseOptions: CommandOptions = {
+  command: "coverage",
+  path: ".",
+  format: "html",
+  open: true,
+  fn: "",
+  ramp: "",
+  strict: false,
+};
+
+const options = (overrides: Partial<CommandOptions> = {}): CommandOptions => ({
+  ...baseOptions,
+  ...overrides,
+});
+
+describe("installationSteps", () => {
+  it("documents the first-time installation workflow in order", () => {
+    expect(installationSteps.length).toBeGreaterThanOrEqual(4);
+    expect(installationSteps[0].command).toBe("rustup target add wasm32v1-none");
+
+    for (const step of installationSteps) {
+      expect(step.title).toBeTruthy();
+      expect(step.description).toBeTruthy();
+      expect(step.command).toBeTruthy();
+    }
+
+    const commands = installationSteps.map((step) => step.command);
+    expect(commands).toContain("cargo install soroban-testkit-cli --locked");
+    expect(commands).toContain("cargo install cargo-llvm-cov");
+    expect(commands).toContain("cargo add --dev soroban-testkit");
+    expect(commands).toContain("soroban-testkit --help");
+  });
+
+  it("ends on the command the workbench generates by default", () => {
+    const last = installationSteps[installationSteps.length - 1];
+    expect(last.command).toBe(buildCommand(options()));
+  });
+});
+
+describe("effectiveDefaults", () => {
+  it("returns no fallback rows for coverage", () => {
+    expect(effectiveDefaults(options())).toEqual([]);
+  });
+
+  it("previews every limits fallback when the inputs are empty", () => {
+    const rows = effectiveDefaults(
+      options({ command: "limits", path: "", fn: "", ramp: "" }),
+    );
+
+    expect(rows.map((row) => row.value)).toEqual([
+      "target/wasm32v1-none/release/contract.wasm",
+      "batch_payout",
+      "recipients",
+    ]);
+    expect(rows.every((row) => row.applied)).toBe(true);
+  });
+
+  it("marks typed limits values as coming from the input", () => {
+    const rows = effectiveDefaults(
+      options({
+        command: "limits",
+        path: "target/release/my_contract.wasm",
+        fn: "execute_equal",
+        ramp: "",
+      }),
+    );
+
+    expect(rows.find((row) => row.key === "path")).toMatchObject({
+      value: "target/release/my_contract.wasm",
+      applied: false,
+    });
+    expect(rows.find((row) => row.key === "fn")).toMatchObject({
+      input: "execute_equal",
+      value: "execute_equal",
+      applied: false,
+    });
+    expect(rows.find((row) => row.key === "ramp")).toMatchObject({
+      value: "recipients",
+      applied: true,
+    });
+  });
+
+  it("previews the audit source fallback only when the path is empty", () => {
+    expect(effectiveDefaults(options({ command: "audit", path: "" }))).toEqual([
+      {
+        key: "path",
+        label: "Project path",
+        input: "",
+        value: "./src",
+        applied: true,
+      },
+    ]);
+
+    const rows = effectiveDefaults(
+      options({ command: "audit", path: "./contracts" }),
+    );
+    expect(rows[0]).toMatchObject({ value: "./contracts", applied: false });
+  });
+});
+
+describe("summarizeConfiguration", () => {
+  it("summarizes the coverage settings", () => {
+    expect(summarizeConfiguration(options())).toEqual([
+      { label: "Project or contract path", value: "." },
+      { label: "Report format", value: "html" },
+      { label: "Open report when complete", value: "On" },
+    ]);
+  });
+
+  it("marks an omitted coverage path", () => {
+    expect(summarizeConfiguration(options({ path: "" }))[0]).toEqual({
+      label: "Project or contract path",
+      value: "(omitted)",
+    });
+  });
+
+  it("summarizes limits fallbacks with a default marker", () => {
+    expect(
+      summarizeConfiguration(
+        options({ command: "limits", path: "", fn: "", ramp: "" }),
+      ),
+    ).toEqual([
+      {
+        label: "Contract artifact",
+        value: "target/wasm32v1-none/release/contract.wasm (default)",
+      },
+      { label: "Function", value: "batch_payout (default)" },
+      { label: "Ramp parameter", value: "recipients (default)" },
+    ]);
+  });
+
+  it("summarizes audit settings", () => {
+    expect(
+      summarizeConfiguration(
+        options({ command: "audit", path: "./src", strict: true }),
+      ),
+    ).toEqual([
+      { label: "Project path", value: "./src" },
+      { label: "Fail on warnings", value: "On" },
+    ]);
+  });
+});
+
+describe("compareConfigurations", () => {
+  it("marks identical configurations as matching", () => {
+    const rows = compareConfigurations(options(), options());
+
+    expect(rows.map((row) => row.key)).toEqual([
+      "command",
+      "path",
+      "format",
+      "open",
+    ]);
+    expect(rows.every((row) => !row.changed)).toBe(true);
+  });
+
+  it("flags the settings that differ between two configurations", () => {
+    const rows = compareConfigurations(
+      options(),
+      options({ path: "./contracts/escrow" }),
+    );
+
+    expect(rows.find((row) => row.key === "path")).toMatchObject({
+      a: ".",
+      b: "./contracts/escrow",
+      changed: true,
+    });
+    expect(rows.find((row) => row.key === "format")?.changed).toBe(false);
+  });
+
+  it("includes a setting once either workflow uses it", () => {
+    const rows = compareConfigurations(options(), options({ command: "limits" }));
+
+    expect(rows.map((row) => row.key)).toEqual([
+      "command",
+      "path",
+      "format",
+      "open",
+      "fn",
+      "ramp",
+    ]);
+    expect(rows.find((row) => row.key === "command")?.changed).toBe(true);
+    expect(rows.find((row) => row.key === "format")).toMatchObject({
+      a: "html",
+      b: "n/a",
+      changed: true,
+    });
+  });
+
+  it("shows audit-only rows when either side audits", () => {
+    const rows = compareConfigurations(
+      options({ command: "audit", path: "./src", strict: true }),
+      options({ command: "audit", path: "./contracts", strict: false }),
+    );
+
+    expect(rows.map((row) => row.key)).toEqual(["command", "path", "strict"]);
+    expect(rows.find((row) => row.key === "strict")).toMatchObject({
+      a: "On",
+      b: "Off",
+      changed: true,
+    });
+  });
+
+  it("renders empty values as (empty) instead of blank cells", () => {
+    const rows = compareConfigurations(
+      options({ command: "limits", path: "", fn: "", ramp: "" }),
+      options({ command: "limits", path: "", fn: "", ramp: "" }),
+    );
+
+    expect(rows.find((row) => row.key === "path")).toMatchObject({
+      a: "(empty)",
+      b: "(empty)",
+      changed: false,
+    });
   });
 });
 
