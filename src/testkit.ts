@@ -1,4 +1,5 @@
 export type CommandName = "coverage" | "limits" | "audit";
+export type OptionalArgKey = "format" | "open" | "strict";
 
 export interface CommandOptions {
   command: CommandName;
@@ -8,6 +9,7 @@ export interface CommandOptions {
   fn: string;
   ramp: string;
   strict: boolean;
+  optionalArgOrder?: OptionalArgKey[];
 }
 
 export const modules = [
@@ -22,13 +24,47 @@ export const modules = [
 
 const quote = (value: string) => (value.includes(" ") ? `"${value}"` : value);
 
+const getOptionalArgOrder = (options: CommandOptions): OptionalArgKey[] => {
+  if (options.command === "coverage") {
+    return options.optionalArgOrder && options.optionalArgOrder.length > 0
+      ? options.optionalArgOrder
+      : ["format", "open"];
+  }
+
+  if (options.command === "audit") {
+    return options.optionalArgOrder && options.optionalArgOrder.length > 0
+      ? options.optionalArgOrder
+      : ["strict"];
+  }
+
+  return [];
+};
+
+const buildOptionalArgs = (options: CommandOptions): string[] => {
+  const order = getOptionalArgOrder(options);
+  const args: string[] = [];
+
+  for (const key of order) {
+    if (key === "format") {
+      args.push(`--format ${options.format}`);
+    }
+    if (key === "open") {
+      if (options.open) args.push("--open");
+    }
+    if (key === "strict") {
+      if (options.strict) args.push("--strict");
+    }
+  }
+
+  return args;
+};
+
 export function buildCommand(options: CommandOptions): string {
   if (options.command === "coverage") {
     return [
       "soroban-testkit coverage",
       options.path && quote(options.path),
-      `--format ${options.format}`,
-      options.open && "--open",
+      ...buildOptionalArgs(options),
     ]
       .filter(Boolean)
       .join(" ");
@@ -49,7 +85,7 @@ export function buildCommand(options: CommandOptions): string {
   return [
     "soroban-testkit audit",
     quote(options.path || "./src"),
-    options.strict && "--strict",
+    ...buildOptionalArgs(options),
   ]
     .filter(Boolean)
     .join(" ");
@@ -64,19 +100,14 @@ export function formatCommandLine(
   }
 
   if (options.command === "coverage") {
-    const args: string[] = [];
-    if (options.path) args.push(quote(options.path));
-    args.push(`--format ${options.format}`);
-    if (options.open) args.push("--open");
+    const args = [
+      "soroban-testkit coverage",
+      ...(options.path ? [`  ${quote(options.path)}`] : []),
+      ...(options.format ? [`  --format ${options.format}`] : []),
+      ...(options.open ? ["  --open"] : []),
+    ];
 
-    if (args.length === 0) {
-      return "soroban-testkit coverage";
-    }
-
-    return [
-      "soroban-testkit coverage \\",
-      ...args.map((arg, index) => `  ${arg}${index < args.length - 1 ? " \\" : ""}`),
-    ].join("\n");
+    return args.join("\n");
   }
 
   if (options.command === "limits") {
@@ -87,24 +118,21 @@ export function formatCommandLine(
     const ramp = options.ramp || "recipients";
 
     return [
-      "soroban-testkit limits \\",
-      `  --contract ${contractPath} \\`,
-      `  --fn ${fn} \\`,
+      "soroban-testkit limits",
+      `  --contract ${contractPath}`,
+      `  --fn ${fn}`,
       `  --ramp ${ramp}`,
     ].join("\n");
   }
 
-  // audit
   const auditPath = quote(options.path || "./src");
-  if (options.strict) {
-    return [
-      "soroban-testkit audit \\",
-      `  ${auditPath} \\`,
-      "  --strict",
-    ].join("\n");
-  }
+  const args = [
+    "soroban-testkit audit",
+    `  ${auditPath}`,
+    ...(options.strict ? ["  --strict"] : []),
+  ];
 
-  return ["soroban-testkit audit \\", `  ${auditPath}`].join("\n");
+  return args.join("\n");
 }
 
 export interface CliCompatibility {
@@ -214,4 +242,3 @@ export const localFileGuides: Record<CommandName, LocalFileGuide> = {
       "100% offline, read-only and non-destructive. Source code is parsed locally without external telemetry.",
   },
 };
-

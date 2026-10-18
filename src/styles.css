@@ -141,6 +141,58 @@ h1 { margin: var(--space-xl) 0 var(--space-3xl); font-size: clamp(3.4rem, 6.5vw,
 .button { padding: 13px 19px; border-radius: var(--radius-base); font-weight: 600; font-size: .9rem; cursor: pointer; }
 .primary { color: var(--color-accent-text-dark); background: var(--color-accent); border: 0; }
 .secondary { border: 1px solid var(--color-border-strong); background: transparent; color: var(--color-text-primary); }
+.command-actions { margin-top: 16px; }
+.field-help {
+  color: var(--color-text-secondary);
+  font-size: .72rem;
+  line-height: 1.5;
+  margin-top: -4px;
+}
+.field-group { margin-bottom: var(--space-2xl); }
+.argument-order-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+.argument-order-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--color-input-bg);
+  border: 1px solid var(--color-border-input);
+  border-radius: var(--radius-sm);
+}
+.argument-order-name { color: var(--color-text-primary); font-weight: 600; }
+.argument-order-summary { color: var(--color-text-secondary); font-family: var(--font-mono); font-size: .72rem; }
+.argument-order-controls { display: flex; gap: 6px; }
+.argument-order-controls button {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+.argument-order-controls button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.advanced-command-block { margin-top: 20px; display: grid; gap: 12px; }
+textarea {
+  width: 100%;
+  min-height: 160px;
+  padding: 12px 13px;
+  color: var(--color-text-primary);
+  background: var(--color-surface-output);
+  border: 1px solid var(--color-border-input);
+  border-radius: var(--radius-sm);
+  resize: vertical;
+  font: .78rem/1.5 var(--font-mono);
+}
+textarea:focus { border-color: var(--color-accent); }
 
 /* Terminal */
 .terminal { background: var(--color-surface-terminal); border: 1px solid var(--color-border-default); border-radius: var(--radius-xl); box-shadow: 0 30px 80px #0008; transform: rotate(1deg); overflow: hidden; font-family: var(--font-mono); }

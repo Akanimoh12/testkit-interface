@@ -178,3 +178,47 @@ describe("Visual distinction between required and optional settings (#196)", () 
     expect(screen.getByText("Optional")).toBeInTheDocument();
   });
 });
+
+describe("Command builder enhancements", () => {
+  it("allows optional coverage arguments to be reordered", () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Move Open report up" }));
+
+    expect(screen.getByText("soroban-testkit coverage . --open --format html")).toBeInTheDocument();
+  });
+
+  it("requires confirmation before resetting the customized builder", () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset builder" }));
+    expect(confirmSpy).toHaveBeenCalledWith("Reset the command builder to its default values?");
+    expect(screen.getByText("soroban-testkit coverage . --format html --open")).toBeInTheDocument();
+
+    confirmSpy.mockReturnValue(true);
+    fireEvent.click(screen.getByRole("button", { name: "Reset builder" }));
+    expect(screen.getByText("soroban-testkit coverage . --format html --open")).toBeInTheDocument();
+  });
+
+  it("displays contextual help beside function and ramp inputs", () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "limits" }));
+
+    expect(screen.getByText(/Use the exported symbol name from your contract ABI/i)).toBeInTheDocument();
+    expect(screen.getByText(/Use the parameter you want to increase in the contract input set/i)).toBeInTheDocument();
+  });
+
+  it("supports a multiline advanced command editor", () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Advanced arguments" }));
+
+    const textarea = screen.getByLabelText("Advanced command arguments");
+    fireEvent.change(textarea, {
+      target: { value: "soroban-testkit audit ./src --strict" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply multiline command" }));
+
+    expect(screen.getByText("soroban-testkit audit ./src --strict")).toBeInTheDocument();
+  });
+});
