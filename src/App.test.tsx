@@ -178,3 +178,35 @@ describe("Visual distinction between required and optional settings (#196)", () 
     expect(screen.getByText("Optional")).toBeInTheDocument();
   });
 });
+
+describe("Soroban workflow documentation and prerequisites", () => {
+  it("shows the supported Rust and Soroban prerequisites in an accessible guide panel", () => {
+    render(<App />);
+
+    expect(screen.getByRole("heading", { name: /supported rust and soroban prerequisites/i })).toBeInTheDocument();
+    expect(screen.getByText(/Rust >= 1\.84/i)).toBeInTheDocument();
+    expect(screen.getByText(/soroban-sdk 27\.0\.x/i)).toBeInTheDocument();
+    expect(screen.getByText(/stellar-cli >= 22\.0\.0/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/wasm32v1-none/i).length).toBeGreaterThan(0);
+  });
+
+  it("renders keyboard-accessible workflow tabs for coverage, workspace, and resource limits tutorials", () => {
+    render(<App />);
+
+    const tablist = screen.getByRole("tablist", { name: /soroban workflow docs/i });
+    expect(tablist).toBeInTheDocument();
+
+    const coverageTab = screen.getByRole("tab", { name: /coverage workflow/i });
+    const workspaceTab = screen.getByRole("tab", { name: /cargo workspace/i });
+    const limitsTab = screen.getByRole("tab", { name: /resource limits/i });
+
+    expect(coverageTab).toHaveAttribute("aria-selected", "true");
+    expect(workspaceTab).toHaveAttribute("aria-selected", "false");
+    expect(limitsTab).toHaveAttribute("aria-selected", "false");
+
+    expect(screen.getByRole("tabpanel", { name: /coverage workflow/i })).toBeInTheDocument();
+    expect(screen.getAllByText(/cargo llvm-?cov/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/workspace members/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/batch_payout/i).length).toBeGreaterThan(0);
+  });
+});
