@@ -474,3 +474,13 @@ footer { display: flex; justify-content: space-between; padding: 34px var(--page
 .syntax-path {
   color: var(--syntax-path, #6f42c1);
 }
+
+/* Repository and installation links (#120, #121, #122) */
+.repo-callout { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin-top: 22px; }
+.repo-link { font-weight: 600; color: var(--color-text-primary); text-decoration: underline; text-underline-offset: 3px; }
+.repo-callout-note { color: var(--color-text-secondary); font-size: .85rem; }
+.install-guide { margin-top: var(--space-3xl); padding: var(--space-xl); border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: var(--color-surface-card); }
+.install-guide h3 { margin: 0 0 var(--space-sm); }
+.install-guide p { margin: 0 0 var(--space-base); color: var(--color-text-secondary); }
+.footer-links a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.repo-link:focus-visible, .footer-links a:focus-visible, .install-guide a:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }

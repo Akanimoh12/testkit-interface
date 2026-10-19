@@ -1,6 +1,7 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { CORE_REPO_URL, INSTALL_GUIDE_URL, INTERFACE_REPO_URL } from "./links";
 
 describe("App command copy", () => {
   const originalClipboard = navigator.clipboard;
@@ -121,6 +122,24 @@ describe("Module filter and empty-state layout (#188)", () => {
     fireEvent.click(clearButton);
 
     expect(screen.getByText("ttl")).toBeInTheDocument();
+  });
+
+  it("explains the empty state and returns focus to the search box on reset (#123)", () => {
+    render(<App />);
+    const filterInput = screen.getByLabelText("Filter modules");
+    fireEvent.change(filterInput, { target: { value: "zzz" } });
+
+    expect(screen.getByRole("heading", { name: /No modules match .zzz./ })).toBeInTheDocument();
+    expect(document.getElementById("module-grid")).toBeNull();
+
+    const resetButton = screen.getByRole("button", { name: "Reset filter" });
+    resetButton.focus();
+    fireEvent.click(resetButton);
+
+    expect(filterInput).toHaveValue("");
+    expect(filterInput).toHaveFocus();
+    const grid = document.getElementById("module-grid") as HTMLElement;
+    expect(within(grid).getAllByRole("article")).toHaveLength(7);
   });
 });
 
@@ -260,5 +279,44 @@ describe("Command builder enhancements", () => {
     expect(screen.getByTestId("command-output")).toHaveTextContent(
       "soroban-testkit audit ./src --strict",
     );
+  });
+});
+
+describe("Repository and installation links (#120, #121, #122)", () => {
+  it("links to the core Testkit repository from the footer (#120)", () => {
+    render(<App />);
+    // The footer sits inside <main>, so it is not a contentinfo landmark; query it directly.
+    const footer = document.querySelector("footer") as HTMLElement;
+    const link = within(footer).getByRole("link", { name: "Soroban Testkit core repository" });
+    expect(link).toHaveAttribute("href", CORE_REPO_URL);
+    expect(CORE_REPO_URL).toBe("https://github.com/soroban-testkit/testkit-blockchain");
+  });
+
+  it("has a dedicated section linking to the full installation instructions (#121)", () => {
+    render(<App />);
+    const section = screen.getByRole("complementary", { name: "Full installation instructions" });
+    const link = within(section).getByRole("link", { name: /Read the installation guide/ });
+    expect(link).toHaveAttribute("href", INSTALL_GUIDE_URL);
+    expect(INSTALL_GUIDE_URL).toBe("https://github.com/soroban-testkit/testkit-blockchain#installation");
+  });
+
+  it("shows a prominent link to the interface repository in the hero (#122)", () => {
+    render(<App />);
+    const link = screen.getByRole("link", { name: /View this interface on GitHub/ });
+    expect(link).toHaveAttribute("href", INTERFACE_REPO_URL);
+    expect(INTERFACE_REPO_URL).toBe("https://github.com/soroban-testkit/testkit-interface");
+  });
+
+  it("makes every new link reachable by keyboard", () => {
+    render(<App />);
+    for (const name of [
+      "Soroban Testkit core repository",
+      /Read the installation guide/,
+      /View this interface on GitHub/,
+    ]) {
+      const link = screen.getByRole("link", { name });
+      link.focus();
+      expect(link).toHaveFocus();
+    }
   });
 });
