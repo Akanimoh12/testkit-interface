@@ -98,6 +98,17 @@ export const modules = [
 
 const quote = (value: string) => (value.includes(" ") ? `"${value}"` : value);
 
+/**
+ * Values `buildCommand` substitutes when a field is left empty. Exported so
+ * the workbench can preview the effective command before copying it.
+ */
+export const fallbackValues = {
+  limitsContract: "target/wasm32v1-none/release/contract.wasm",
+  limitsFunction: "batch_payout",
+  limitsRamp: "recipients",
+  auditPath: "./src",
+} as const;
+
 export function buildCommand(options: CommandOptions): string {
   if (options.command === "coverage") {
     return [
@@ -114,17 +125,17 @@ export function buildCommand(options: CommandOptions): string {
     return [
       "soroban-testkit limits",
       "--contract",
-      quote(options.path || "target/wasm32v1-none/release/contract.wasm"),
+      quote(options.path || fallbackValues.limitsContract),
       "--fn",
-      options.fn || "batch_payout",
+      options.fn || fallbackValues.limitsFunction,
       "--ramp",
-      options.ramp || "recipients",
+      options.ramp || fallbackValues.limitsRamp,
     ].join(" ");
   }
 
   return [
     "soroban-testkit audit",
-    quote(options.path || "./src"),
+    quote(options.path || fallbackValues.auditPath),
     options.strict && "--strict",
   ]
     .filter(Boolean)
@@ -156,11 +167,9 @@ export function formatCommandLine(
   }
 
   if (options.command === "limits") {
-    const contractPath = quote(
-      options.path || "target/wasm32v1-none/release/contract.wasm",
-    );
-    const fn = options.fn || "batch_payout";
-    const ramp = options.ramp || "recipients";
+    const contractPath = quote(options.path || fallbackValues.limitsContract);
+    const fn = options.fn || fallbackValues.limitsFunction;
+    const ramp = options.ramp || fallbackValues.limitsRamp;
 
     return [
       "soroban-testkit limits \\",
@@ -171,7 +180,7 @@ export function formatCommandLine(
   }
 
   // audit
-  const auditPath = quote(options.path || "./src");
+  const auditPath = quote(options.path || fallbackValues.auditPath);
   if (options.strict) {
     return [
       "soroban-testkit audit \\",
@@ -339,6 +348,55 @@ export const cliCompatibility: readonly CliCompatibility[] = [
     status: "Upcoming",
     notes:
       "Extended persistent TTL storage simulation, multi-contract cross-call limits ramp, and gas telemetry export.",
+  },
+];
+
+export interface InstallStep {
+  title: string;
+  description: string;
+  command: string;
+}
+
+/**
+ * First-time installation workflow, mirrored from the CLI documentation in
+ * `testkit-blockchain`. Ordered: each step builds on the previous one.
+ */
+export const installationSteps: readonly InstallStep[] = [
+  {
+    title: "Add the WebAssembly target",
+    description:
+      "Testkit probes compiled contracts on the pinned Rust stable toolchain, so the wasm32v1-none target has to be present.",
+    command: "rustup target add wasm32v1-none",
+  },
+  {
+    title: "Install the soroban-testkit CLI",
+    description:
+      "Installs the companion binary from crates.io. From a workspace checkout, install the local crate instead with: cargo install --path crates/cli --locked",
+    command: "cargo install soroban-testkit-cli --locked",
+  },
+  {
+    title: "Install the coverage wrapper",
+    description:
+      "The coverage workflow shells out to cargo-llvm-cov, which Testkit calls but does not bundle. Skip this step if you only use limits or audit.",
+    command: "cargo install cargo-llvm-cov",
+  },
+  {
+    title: "Add the crate to your contract",
+    description:
+      "Adds Testkit as a dev-dependency so contract tests can import the prelude and the focused testing modules.",
+    command: "cargo add --dev soroban-testkit",
+  },
+  {
+    title: "Verify the installation",
+    description:
+      "Confirms the binary resolves on your PATH and lists the supported subcommands.",
+    command: "soroban-testkit --help",
+  },
+  {
+    title: "Build your first command",
+    description:
+      "The workbench below generates coverage, limits, and audit commands, previews every default that will be applied, and copies the exact line to your terminal.",
+    command: "soroban-testkit coverage . --format html --open",
   },
 ];
 
