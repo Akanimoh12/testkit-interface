@@ -203,6 +203,18 @@ textarea:focus { border-color: var(--color-accent); }
 .terminal b, .muted { color: var(--color-accent); font-weight: 400; }
 .pass { padding: var(--space-base) var(--space-3xl); background: var(--color-accent-surface); border-top: 1px solid var(--color-accent-border); color: var(--color-accent); font-size: .75rem; }
 
+/* Install / First-time setup */
+.install { padding: var(--space-section) var(--page-padding); border-top: 1px solid var(--color-border-subtle); }
+.install-intro { color: var(--color-text-secondary); line-height: 1.7; }
+.install-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-xl); }
+.install-step { display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-3xl); background: var(--color-surface-card); border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); }
+.install-step-number { color: var(--color-accent); letter-spacing: .14em; font: 500 .72rem var(--font-mono); }
+.install-step h3 { margin: 0; font-size: 1rem; letter-spacing: -.01em; }
+.install-step p { margin: 0 0 var(--space-sm); color: var(--color-text-body); font-size: .84rem; line-height: 1.6; flex: 1; }
+.install-command { display: flex; align-items: center; gap: var(--space-sm); padding: var(--space-md) var(--space-base); background: var(--color-surface-output); border-radius: var(--radius-md); }
+.install-command code { flex: 1; color: var(--color-accent); font: .7rem/1.5 var(--font-mono); overflow-wrap: anywhere; }
+.install-command button { color: var(--color-canvas); background: var(--color-accent); border: 0; border-radius: var(--radius-xs); padding: var(--space-2xs) var(--space-sm); cursor: pointer; font-size: .68rem; font-weight: 600; white-space: nowrap; }
+
 /* Modules */
 .modules, .commands { padding: var(--space-section) var(--page-padding); border-top: 1px solid var(--color-border-subtle); }
 section header { max-width: 650px; margin-bottom: 50px; }
@@ -291,6 +303,31 @@ h2 { margin: var(--space-md) 0; font-size: clamp(2rem, 4vw, 4rem); letter-spacin
 .command-copy > p:not(.eyebrow) { color: var(--color-text-body); line-height: 1.7; }
 .command-tabs { display: flex; gap: var(--space-sm); margin-top: 36px; }
 .description { min-height: 48px; }
+
+/* Command summary card */
+.summary-card { margin-top: var(--space-2xl); padding: var(--space-3xl); background: var(--color-surface-card); border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); }
+.summary-card h3 { margin: 0; color: var(--color-text-muted); font: 500 .68rem var(--font-mono); text-transform: uppercase; letter-spacing: .12em; }
+.summary-workflow { margin: var(--space-sm) 0 var(--space-lg); color: var(--color-accent); font: 500 1rem var(--font-mono); }
+.summary-settings { margin: 0; display: grid; gap: var(--space-sm); }
+.summary-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-lg); }
+.summary-row dt { color: var(--color-text-muted); font-size: .78rem; }
+.summary-row dd { margin: 0; color: var(--color-text-primary); font: .76rem var(--font-mono); text-align: right; overflow-wrap: anywhere; }
+.summary-note { margin: var(--space-lg) 0 0; color: var(--color-text-muted); font-size: .7rem; line-height: 1.5; }
+
+.comparison-toggle { margin-top: var(--space-2xl); padding: 10px var(--space-base); background: transparent; border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); color: var(--color-text-secondary); cursor: pointer; font-size: .8rem; }
+.comparison-toggle:hover, .comparison-toggle[aria-expanded="true"] { color: var(--color-accent); border-color: var(--color-accent); }
+
+/* Effective defaults preview */
+.defaults-preview { margin-bottom: var(--space-2xl); padding: var(--space-lg) var(--space-xl); background: var(--color-input-bg); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); }
+.defaults-preview-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
+.defaults-preview h3 { margin: 0; color: var(--color-text-muted); font: 500 .68rem var(--font-mono); text-transform: uppercase; letter-spacing: .12em; }
+.defaults-count { color: var(--color-text-muted); font-size: .7rem; }
+.defaults-list { margin: var(--space-md) 0 0; display: grid; gap: 9px; }
+.defaults-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); }
+.defaults-row dt { color: var(--color-text-muted); font-size: .76rem; }
+.defaults-row dd { margin: 0; flex: 1; display: flex; align-items: center; justify-content: flex-end; gap: var(--space-sm); }
+.defaults-row code { color: var(--color-text-code); font: .7rem var(--font-mono); overflow-wrap: anywhere; }
+.defaults-empty { margin: var(--space-md) 0 0; color: var(--color-text-muted); font-size: .78rem; line-height: 1.5; }
 .builder { padding: var(--space-5xl); background: var(--color-canvas); border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); }
 
 /* Field & Required/Optional distinction */
@@ -332,6 +369,30 @@ input:focus, select:focus { border-color: var(--color-accent); }
 .output { display: flex; align-items: center; gap: 15px; padding: var(--space-lg); background: var(--color-surface-output); border-radius: var(--radius-md); }
 .output code { flex: 1; color: var(--color-accent); font: .75rem/1.6 var(--font-mono); overflow-wrap: anywhere; }
 .output button { color: var(--color-canvas); background: var(--color-accent); border: 0; border-radius: var(--radius-xs); padding: var(--space-sm) var(--space-md); cursor: pointer; font-weight: 600; }
+
+/* Configuration comparison */
+.comparison { grid-column: 1 / -1; min-width: 0; padding-top: var(--space-5xl); border-top: 1px solid var(--color-border-subtle); }
+.comparison-header h3 { margin: 0 0 var(--space-sm); font-size: 1.2rem; }
+.comparison-header p { margin: 0; max-width: 640px; color: var(--color-text-body); font-size: .87rem; line-height: 1.6; }
+.comparison-config { margin: var(--space-3xl) 0 0; padding: var(--space-xl) var(--space-3xl) var(--space-md); border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); }
+.comparison-config legend { padding: 0 var(--space-sm); color: var(--color-text-label); font-size: .78rem; }
+.comparison-sync { margin-bottom: var(--space-2xl); }
+.comparison-table-wrap { margin-top: var(--space-3xl); overflow-x: auto; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); }
+.comparison-table { width: 100%; min-width: 640px; border-collapse: collapse; }
+.comparison-table th, .comparison-table td { padding: var(--space-base) var(--space-xl); text-align: left; border-bottom: 1px solid var(--color-border-subtle); vertical-align: middle; }
+.comparison-table thead th { background: var(--color-surface-card); color: var(--color-text-muted); font: 500 .66rem var(--font-mono); text-transform: uppercase; letter-spacing: .08em; }
+.comparison-table tbody th { color: var(--color-text-label); font-size: .78rem; font-weight: 500; }
+.comparison-table td { color: var(--color-text-primary); font: .74rem/1.5 var(--font-mono); overflow-wrap: anywhere; }
+.comparison-table tbody tr:last-child th, .comparison-table tbody tr:last-child td { border-bottom: 0; }
+.comparison-table tbody tr[data-changed="true"] th, .comparison-table tbody tr[data-changed="true"] td { background: var(--color-accent-subtle); }
+.comparison-status { color: var(--color-text-muted); font-size: .74rem; }
+.comparison-commands { margin-top: var(--space-3xl); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-xl); }
+.comparison-commands h4 { margin: 0 0 var(--space-sm); color: var(--color-text-muted); font: 500 .68rem var(--font-mono); text-transform: uppercase; letter-spacing: .1em; }
+.comparison-command { margin: 0; padding: var(--space-lg); background: var(--color-surface-output); border-radius: var(--radius-md); white-space: pre-wrap; }
+.comparison-command code { color: var(--color-accent); font: .72rem/1.6 var(--font-mono); overflow-wrap: anywhere; }
+
+/* Visible keyboard focus for the interactive controls added alongside the workbench */
+.install-command button:focus-visible, .comparison-toggle:focus-visible, .comparison-sync:focus-visible, .comparison-table-wrap:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border-width: 0; }
 
 footer { display: flex; justify-content: space-between; padding: 34px var(--page-padding); border-top: 1px solid var(--color-border-subtle); color: var(--color-text-muted); font-size: .78rem; }
@@ -342,6 +403,8 @@ footer { display: flex; justify-content: space-between; padding: 34px var(--page
   .hero { padding-top: 70px; }
   .module-grid { grid-template-columns: repeat(2, 1fr); }
   .nav-links a { max-width: 140px; }
+  .install-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .comparison-commands { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 600px) {
@@ -361,9 +424,14 @@ footer { display: flex; justify-content: space-between; padding: 34px var(--page
 }
 
 @media (max-width: 540px) {
-  nav, .hero, .modules, .commands { padding-left: 22px; padding-right: 22px; }
+  nav, .hero, .modules, .commands, .install { padding-left: 22px; padding-right: 22px; }
   .module-grid { grid-template-columns: 1fr; }
+  .install-steps { grid-template-columns: 1fr; }
   .row { grid-template-columns: 1fr; }
+  .defaults-row, .summary-row { flex-direction: column; align-items: flex-start; gap: var(--space-2xs); }
+  .defaults-row dd { justify-content: flex-start; }
+  .summary-row dd { text-align: left; }
+  .comparison-config { padding: var(--space-xl); }
   .actions { flex-direction: column; }
   .terminal pre { padding: 22px; font-size: .7rem; }
   footer { gap: 20px; }
