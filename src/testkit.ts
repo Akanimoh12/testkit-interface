@@ -10,6 +10,82 @@ export interface CommandOptions {
   strict: boolean;
 }
 
+// Issue #142: Flag explanations
+export const flagExplanations: Record<string, string> = {
+  // coverage flags
+  "coverage.path": "Path to your contract project directory (default: current directory)",
+  "coverage.format": "Output format: html (interactive report), lcov (machine-readable), or text (terminal summary)",
+  "coverage.open": "Automatically open the HTML coverage report in your default browser",
+
+  // limits flags
+  "limits.path": "Path to compiled contract WASM artifact (default: target/wasm32v1-none/release/contract.wasm)",
+  "limits.fn": "Function name to probe for resource limits (default: batch_payout)",
+  "limits.ramp": "Parameter to ramp up (default: recipients)",
+
+  // audit flags
+  "audit.path": "Path to contract source code directory (default: ./src)",
+  "audit.strict": "Enable strict mode for stricter security checks",
+};
+
+// Issue #139: Presets for common project layouts
+export interface ConfigPreset {
+  name: string;
+  description: string;
+  options: Partial<CommandOptions>;
+}
+
+export const configPresets: ConfigPreset[] = [
+  {
+    name: "monorepo-contracts",
+    description: "Typical monorepo structure with /contracts subdirectory",
+    options: {
+      path: "./contracts",
+      command: "coverage",
+      format: "html",
+      open: true,
+    },
+  },
+  {
+    name: "single-contract",
+    description: "Single contract in repository root",
+    options: {
+      path: ".",
+      command: "coverage",
+      format: "html",
+      open: true,
+    },
+  },
+  {
+    name: "workspace-contract",
+    description: "Rust workspace with contract as member",
+    options: {
+      path: "./contracts/my-contract",
+      command: "coverage",
+      format: "html",
+      open: true,
+    },
+  },
+  {
+    name: "audit-strict",
+    description: "Run security audit in strict mode",
+    options: {
+      command: "audit",
+      path: "./src",
+      strict: true,
+    },
+  },
+  {
+    name: "limits-custom-function",
+    description: "Test custom function limits with ramped parameter",
+    options: {
+      command: "limits",
+      path: "target/wasm32v1-none/release/contract.wasm",
+      fn: "transfer",
+      ramp: "amount",
+    },
+  },
+];
+
 export const modules = [
   ["core", "Deterministic environments and addresses"],
   ["ledger", "Time, sequence, and clock control"],
@@ -105,6 +181,126 @@ export function formatCommandLine(
   }
 
   return ["soroban-testkit audit \\", `  ${auditPath}`].join("\n");
+}
+
+// Issue #140: Export configuration as JSON
+export interface ConfigurationExport {
+  version: string;
+  exportedAt: string;
+  options: CommandOptions;
+  command: string;
+}
+
+export function exportConfigAsJson(options: CommandOptions): string {
+  const config: ConfigurationExport = {
+    version: "1.0",
+    exportedAt: new Date().toISOString(),
+    options,
+    command: buildCommand(options),
+  };
+  return JSON.stringify(config, null, 2);
+}
+
+// Issue #138: Import configuration with validation
+export interface ValidationResult {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+export function validateConfiguration(data: unknown): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  if (!data || typeof data !== "object") {
+    errors.push("Configuration must be a valid JSON object");
+    return { valid: false, errors, warnings };
+  }
+
+  const config = data as Record<string, unknown>;
+
+  // Validate required fields
+  if (!config.options || typeof config.options !== "object") {
+    errors.push("Configuration must contain 'options' object");
+    return { valid: false, errors, warnings };
+  }
+
+  const options = config.options as Record<string, unknown>;
+
+  // Validate command
+  const validCommands = ["coverage", "limits", "audit"];
+  if (!options.command || !validCommands.includes(String(options.command))) {
+    errors.push(`command must be one of: ${validCommands.join(", ")}`);
+  }
+
+  // Validate path
+  if (options.path && typeof options.path !== "string") {
+    errors.push("path must be a string");
+  }
+
+  // Validate format for coverage
+  if (options.command === "coverage") {
+    const validFormats = ["html", "lcov", "text"];
+    if (options.format && !validFormats.includes(String(options.format))) {
+      errors.push(`format must be one of: ${validFormats.join(", ")}`);
+    }
+  }
+
+  // Validate boolean fields
+  if (options.open !== undefined && typeof options.open !== "boolean") {
+    errors.push("open must be a boolean");
+  }
+  if (options.strict !== undefined && typeof options.strict !== "boolean") {
+    errors.push("strict must be a boolean");
+  }
+
+  // Validate string fields
+  if (options.fn && typeof options.fn !== "string") {
+    errors.push("fn must be a string");
+  }
+  if (options.ramp && typeof options.ramp !== "string") {
+    errors.push("ramp must be a string");
+  }
+
+  // Warnings for missing optional fields
+  if (!options.path) {
+    warnings.push("path is not set; default values will be used");
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    warnings,
+  };
+}
+
+export function importConfigFromJson(jsonString: string): {
+  options: CommandOptions | null;
+  validation: ValidationResult;
+} {
+  let data: unknown;
+  try {
+    data = JSON.parse(jsonString);
+  } catch (e) {
+    return {
+      options: null,
+      validation: {
+        valid: false,
+        errors: [`Invalid JSON: ${e instanceof Error ? e.message : String(e)}`],
+        warnings: [],
+      },
+    };
+  }
+
+  const validation = validateConfiguration(data);
+  if (!validation.valid) {
+    return { options: null, validation };
+  }
+
+  const config = data as Record<string, unknown>;
+  const options = config.options as CommandOptions;
+
+  return { options, validation };
 }
 
 export interface CliCompatibility {
@@ -214,4 +410,3 @@ export const localFileGuides: Record<CommandName, LocalFileGuide> = {
       "100% offline, read-only and non-destructive. Source code is parsed locally without external telemetry.",
   },
 };
-

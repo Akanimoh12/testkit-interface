@@ -4,36 +4,64 @@ A visual companion to [Soroban Testkit](https://github.com/soroban-testkit/testk
 
 The interface does not execute contracts in the browser. Generated commands run locally through `soroban-testkit`, keeping contract tests deterministic and offline as required by the core project.
 
+## Supported Rust and Soroban prerequisites
+
+The interface targets the current supported ecosystem for local Soroban development and contract validation:
+
+- Rust >= 1.84 with the `wasm32v1-none` target installed.
+- `soroban-sdk` 27.0.x for current contract builds and tests.
+- `stellar-cli` >= 22.0.0 for local contract inspection and deployment workflows.
+- Cargo workspace layout with explicit workspace members and a stable resolver.
+
+## Workflow tutorials
+
+### 1) Complete coverage workflow
+
+Use the coverage workflow from the project root, then export an HTML or LCOV report for review:
+
+```sh
+cargo llvm-cov --workspace --all-features --html
+cargo llvm-cov --workspace --lcov --output-path lcov.info
+```
+
+This is the recommended local path for contract coverage before shipping a Soroban change.
+
+### 2) Cargo workspace layout example
+
+A simple workspace keeps shared dependencies and contract crates organized:
+
+```toml
+[workspace]
+members = [
+  "contracts/asset",
+  "contracts/escrow",
+  "contracts/auction",
+]
+resolver = "2"
+```
+
+This keeps each contract module isolated while making the root workspace easy to test, cover, and audit.
+
+### 3) Resource limits workflow
+
+When validating a contract's practical ceiling, compile the WASM artifact and sweep the target function with the limit ramp:
+
+```sh
+soroban-testkit limits \
+  --contract target/wasm32v1-none/release/contract.wasm \
+  --fn batch_payout \
+  --ramp recipients
+```
+
+This workflow is useful for exploring the exact resource ceiling of auth-heavy or high-volume entrypoints.
+
 ## Features
 
 - **Design System & Theme Tokens**: Comprehensive CSS custom property scale (`:root`) standardizing color schemes (canvas, surfaces, accent, text hierarchy, borders) and spacing increments.
 - **Module Filter & Empty State**: Search and filter testing modules by name or description with real-time feedback and an accessible empty-state layout with quick filter reset.
 - **Responsive & Reduced-Width Navigation**: Accessible navigation layout supporting truncated and responsive labels without overflowing viewport on mobile or narrow screens.
 - **Required vs. Optional Setting Distinction**: Visual badges (`Required` / `Optional`) and `aria-required` attributes in the CLI workbench distinguishing mandatory parameters from optional configuration flags.
-- **Clear Input Controls**: Fast keyboard- and mouse-friendly clearing for project paths, function names, and ramp parameters to recover from mistakes without retyping values.
-- **Command Length Indicator**: Displays the current generated command length in characters so terminal copy workflows are easier to reason about before execution.
-- **Workflow Guides**: Built-in walkthroughs for the Coverage report guide and the Audit workflow tutorial to explain what to look for in generated reports and how to apply the flow in practice.
-
-## Coverage report guide
-
-Use the coverage workflow to answer three questions quickly:
-
-1. Does the crate actually execute the risky paths you care about?
-2. Which branches or lines remain untested after the most recent change?
-3. Are the low-coverage hotspots aligned with the contract risk model?
-
-A healthy report usually combines several signals: broad branch coverage, a few high-value untested edge cases, and a clear reduction in missing assertions around security-sensitive paths.
-
-## Audit workflow tutorial
-
-The audit workflow is best used as a structured validation pass rather than a single command:
-
-1. Point the audit at the exact contract directory or workspace area that changed.
-2. Review auth, arithmetic, and TTL findings before anything else.
-3. Verify each warning with a targeted regression or invariant test.
-4. Use `--strict` when the release gate should fail on warning-level issues.
-
-This keeps the output actionable without turning the scanner into a noisy blocker.
+- **Soroban Workflow Guide**: Accessible tutorial tabs for coverage, Cargo workspace layouts, and resource limit validation.
 
 ## Development
 

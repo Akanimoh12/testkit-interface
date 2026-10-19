@@ -179,35 +179,34 @@ describe("Visual distinction between required and optional settings (#196)", () 
   });
 });
 
-describe("Workflow guidance and input controls", () => {
-  it("shows coverage and audit workflow guidance panels with keyboard-accessible summaries", () => {
+describe("Soroban workflow documentation and prerequisites", () => {
+  it("shows the supported Rust and Soroban prerequisites in an accessible guide panel", () => {
     render(<App />);
 
-    expect(screen.getByRole("heading", { name: /coverage report guide/i })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /audit workflow tutorial/i })).toBeInTheDocument();
-    expect(screen.getByText(/command length/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /supported rust and soroban prerequisites/i })).toBeInTheDocument();
+    expect(screen.getByText(/Rust >= 1\.84/i)).toBeInTheDocument();
+    expect(screen.getByText(/soroban-sdk 27\.0\.x/i)).toBeInTheDocument();
+    expect(screen.getByText(/stellar-cli >= 22\.0\.0/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/wasm32v1-none/i).length).toBeGreaterThan(0);
   });
 
-  it("clears path, function, and ramp fields with dedicated controls", () => {
+  it("renders keyboard-accessible workflow tabs for coverage, workspace, and resource limits tutorials", () => {
     render(<App />);
 
-    const pathInput = screen.getByLabelText(/project or contract path/i);
-    fireEvent.change(pathInput, { target: { value: "./custom/path" } });
-    fireEvent.click(screen.getByRole("button", { name: /clear/i }));
-    expect(pathInput).toHaveValue("");
+    const tablist = screen.getByRole("tablist", { name: /soroban workflow docs/i });
+    expect(tablist).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "limits" }));
+    const coverageTab = screen.getByRole("tab", { name: /coverage workflow/i });
+    const workspaceTab = screen.getByRole("tab", { name: /cargo workspace/i });
+    const limitsTab = screen.getByRole("tab", { name: /resource limits/i });
 
-    const fnInput = screen.getByLabelText(/function/i);
-    const rampInput = screen.getByLabelText(/ramp parameter/i);
+    expect(coverageTab).toHaveAttribute("aria-selected", "true");
+    expect(workspaceTab).toHaveAttribute("aria-selected", "false");
+    expect(limitsTab).toHaveAttribute("aria-selected", "false");
 
-    fireEvent.change(fnInput, { target: { value: "withdraw" } });
-    fireEvent.change(rampInput, { target: { value: "balances" } });
-
-    fireEvent.click(screen.getAllByRole("button", { name: /clear/i })[0]);
-    expect(fnInput).toHaveValue("");
-
-    fireEvent.click(screen.getAllByRole("button", { name: /clear/i })[0]);
-    expect(rampInput).toHaveValue("");
+    expect(screen.getByRole("tabpanel", { name: /coverage workflow/i })).toBeInTheDocument();
+    expect(screen.getAllByText(/cargo llvm-?cov/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/workspace members/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/batch_payout/i).length).toBeGreaterThan(0);
   });
 });
