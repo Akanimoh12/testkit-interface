@@ -361,11 +361,31 @@ label { display: grid; gap: 9px; margin-bottom: var(--space-2xl); color: var(--c
 }
 
 .row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-xl); }
+.field-with-clear {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.field-input { width: 100%; }
 input, select { width: 100%; padding: var(--space-md) 13px; color: var(--color-text-primary); background: var(--color-input-bg); border: 1px solid var(--color-border-input); border-radius: var(--radius-sm); outline: none; }
 input:focus, select:focus { border-color: var(--color-accent); }
+.clear-field-button {
+  border: 1px solid var(--color-border-strong);
+  background: transparent;
+  color: var(--color-text-secondary);
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.clear-field-button:hover, .clear-field-button:focus-visible {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
 .check { display: flex; align-items: center; justify-content: space-between; }
 .check-content { display: flex; align-items: center; gap: var(--space-sm); }
 .check input { width: auto; accent-color: var(--color-accent); }
+.output-wrap { display: grid; gap: 10px; }
 .output { display: flex; align-items: center; gap: 15px; padding: var(--space-lg); background: var(--color-surface-output); border-radius: var(--radius-md); }
 .output code { flex: 1; color: var(--color-accent); font: .75rem/1.6 var(--font-mono); overflow-wrap: anywhere; }
 .output button { color: var(--color-canvas); background: var(--color-accent); border: 0; border-radius: var(--radius-xs); padding: var(--space-sm) var(--space-md); cursor: pointer; font-weight: 600; }
