@@ -1,5 +1,11 @@
-import { type KeyboardEvent, useMemo, useState, useRef, useEffect } from "react";
-import { buildCommand, modules, type CommandName } from "./testkit";
+import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  buildCommand,
+  formatCommandLine,
+  modules,
+  type CommandName,
+  type OptionalArgKey,
+} from "./testkit";
 import { copyToClipboard } from "./clipboard";
 
 const descriptions: Record<CommandName, string> = {
@@ -7,6 +13,13 @@ const descriptions: Record<CommandName, string> = {
   limits: "Ramp a contract input to find its practical resource ceiling.",
   audit: "Scan contract sources for common auth, arithmetic, and TTL risks.",
 };
+
+const defaultCoverageOrder: OptionalArgKey[] = ["format", "open"];
+
+const optionalArgumentRows = [
+  { key: "format" as const, label: "Format", summary: "--format html" },
+  { key: "open" as const, label: "Open report", summary: "--open" },
+];
 
 const workflowTabs = [
   { id: "coverage", label: "Coverage workflow" },
@@ -25,6 +38,7 @@ interface CommandOptions {
   ramp: string;
   strict: boolean;
   shell?: "bash" | "zsh" | "fish" | "sh";
+  optionalArgOrder?: OptionalArgKey[];
 }
 
 interface SummaryRow {
@@ -187,6 +201,9 @@ export default function App() {
   const [copied, setCopied] = useState(false);
   const [copiedStep, setCopiedStep] = useState<number | null>(null);
   const [moduleFilter, setModuleFilter] = useState("");
+  const [coverageOrder, setCoverageOrder] = useState<OptionalArgKey[]>(defaultCoverageOrder);
+  const [multilineEditor, setMultilineEditor] = useState(false);
+  const [advancedCommand, setAdvancedCommand] = useState("");
   const [activeWorkflow, setActiveWorkflow] = useState<WorkflowTabId>("coverage");
   const [compareOpen, setCompareOpen] = useState(false);
   const [configB, setConfigB] = useState<CommandOptions | null>(null);
@@ -195,34 +212,54 @@ export default function App() {
   const comparePanelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e as any).ctrlKey || (e as any).metaKey) {
-        switch ((e as any).key) {
-          case "1":
-            (document.getElementById("top") as HTMLElement)?.scrollIntoView({ behavior: "smooth" });
-            break;
-          case "2":
-            (document.getElementById("install") as HTMLElement)?.scrollIntoView({ behavior: "smooth" });
-            break;
-          case "3":
-            (document.getElementById("modules") as HTMLElement)?.scrollIntoView({ behavior: "smooth" });
-            break;
-          case "4":
-            (document.getElementById("commands") as HTMLElement)?.scrollIntoView({ behavior: "smooth" });
-            break;
-        }
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+
+      switch (event.key) {
+        case "1":
+          document.getElementById("top")?.scrollIntoView({ behavior: "smooth" });
+          break;
+        case "2":
+          document.getElementById("install")?.scrollIntoView({ behavior: "smooth" });
+          break;
+        case "3":
+          document.getElementById("modules")?.scrollIntoView({ behavior: "smooth" });
+          break;
+        case "4":
+          document.getElementById("commands")?.scrollIntoView({ behavior: "smooth" });
+          break;
       }
     };
-    document.addEventListener("keydown", handleKeyDown as any);
-    return () => document.removeEventListener("keydown", handleKeyDown as any);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   const options = useMemo<CommandOptions>(
-    () => ({ command, path, format, open, fn, ramp, strict, shell }),
-    [command, path, format, open, fn, ramp, strict, shell]
+    () => ({
+      command,
+      path,
+      format,
+      open,
+      fn,
+      ramp,
+      strict,
+      shell,
+      optionalArgOrder:
+        command === "coverage" ? coverageOrder : command === "audit" ? ["strict"] : undefined,
+    }),
+    [command, path, format, open, fn, ramp, strict, shell, coverageOrder]
   );
 
   const generated = useMemo(() => buildCommand(options), [options]);
+
+  const toggleAdvancedEditor = () => {
+    if (multilineEditor) {
+      setMultilineEditor(false);
+      return;
+    }
+    setAdvancedCommand(formatCommandLine(options, true));
+    setMultilineEditor(true);
+  };
   const summaryRows = useMemo(() => summarizeConfiguration(options), [options]);
   const defaultRows = useMemo(() => effectiveDefaults(options), [options]);
   const appliedDefaults = defaultRows.filter((row) => row.applied).length;
@@ -246,6 +283,69 @@ export default function App() {
         name.toLowerCase().includes(q) || description.toLowerCase().includes(q)
     );
   }, [moduleFilter]);
+
+  const moveOptionalArg = (key: OptionalArgKey, direction: "up" | "down") => {
+    setCoverageOrder((current) => {
+      const index = current.indexOf(key);
+      if (index < 0) return current;
+      const nextIndex = direction === "up" ? index - 1 : index + 1;
+      if (nextIndex < 0 || nextIndex >= current.length) return current;
+      const next = [...current];
+      [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+      return next;
+    });
+  };
+
+  const resetBuilder = () => {
+    if (!window.confirm("Reset the command builder to its default values?")) return;
+    setCommand("coverage");
+    setPath(".");
+    setFormat("html");
+    setOpen(true);
+    setFn("batch_payout");
+    setRamp("recipients");
+    setStrict(true);
+    setShell("bash");
+    setCoverageOrder(defaultCoverageOrder);
+    setMultilineEditor(false);
+  };
+
+  const applyAdvancedCommand = () => {
+    const tokens = advancedCommand.match(/"[^"]+"|'[^']+'|[^\s]+/g) ?? [];
+    if (tokens.length === 0) return;
+
+    const [tool, selectedCommand, ...args] = tokens;
+    if (tool !== "soroban-testkit") return;
+
+    if (selectedCommand === "coverage") setCommand("coverage");
+    if (selectedCommand === "limits") setCommand("limits");
+    if (selectedCommand === "audit") setCommand("audit");
+
+    const stripQuotes = (value: string) => value.replace(/^["']|["']$/g, "");
+
+    for (let index = 0; index < args.length; index += 1) {
+      const token = args[index];
+      if (token === "--format" && args[index + 1]) {
+        setFormat(args[index + 1] as "html" | "lcov" | "text");
+        index += 1;
+      } else if (token === "--open") {
+        setOpen(true);
+      } else if ((token === "--contract" || token === "--path") && args[index + 1]) {
+        setPath(stripQuotes(args[index + 1]));
+        index += 1;
+      } else if (token === "--fn" && args[index + 1]) {
+        setFn(stripQuotes(args[index + 1]));
+        index += 1;
+      } else if (token === "--ramp" && args[index + 1]) {
+        setRamp(stripQuotes(args[index + 1]));
+        index += 1;
+      } else if (token === "--strict") {
+        setStrict(true);
+      } else if (!token.startsWith("--")) {
+        setPath(stripQuotes(token));
+      }
+    }
+  };
 
   const copy = async () => {
     await copyToClipboard(generated);
@@ -567,6 +667,11 @@ export default function App() {
             ))}
           </div>
           <p className="description">{descriptions[command]}</p>
+          <div className="command-actions">
+            <button type="button" className="button secondary" onClick={resetBuilder}>
+              Reset builder
+            </button>
+          </div>
 
           <section className="summary-card" aria-labelledby="command-summary-heading">
             <h3 id="command-summary-heading">Command summary</h3>
@@ -622,6 +727,43 @@ export default function App() {
           </label>
           {command === "coverage" && (
             <>
+              <div className="field-group">
+                <div className="field-header">
+                  <span>Optional arguments</span>
+                  <span className="badge badge-optional">Reorder</span>
+                </div>
+                <div className="argument-order-list" aria-label="Optional argument order">
+                  {optionalArgumentRows.map((arg) => {
+                    const selected = coverageOrder.includes(arg.key);
+                    const currentIndex = coverageOrder.indexOf(arg.key);
+                    const lastIndex = optionalArgumentRows.length - 1;
+                    return (
+                      <div key={arg.key} className="argument-order-row">
+                        <span className="argument-order-name">{arg.label}</span>
+                        <span className="argument-order-summary">{arg.summary}</span>
+                        <div className="argument-order-controls">
+                          <button
+                            type="button"
+                            onClick={() => moveOptionalArg(arg.key, "up")}
+                            disabled={currentIndex <= 0 || !selected}
+                            aria-label={`Move ${arg.label} up`}
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveOptionalArg(arg.key, "down")}
+                            disabled={currentIndex === -1 || currentIndex >= lastIndex}
+                            aria-label={`Move ${arg.label} down`}
+                          >
+                            ↓
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
               <label>
                 <div className="field-header">
                   <span>Report format</span>
@@ -649,6 +791,9 @@ export default function App() {
                   <span>Function</span>
                   <span className="badge badge-required">Required</span>
                 </div>
+                <div id="fn-help" className="field-help">
+                  Use the exported symbol name from your contract ABI, such as batch_payout.
+                </div>
                 <div className="field-with-clear">
                   <input
                     className={fieldClasses}
@@ -656,6 +801,7 @@ export default function App() {
                     onChange={(event) => setFn(event.target.value)}
                     aria-label="Function"
                     aria-required="true"
+                    aria-describedby="fn-help"
                   />
                   {fn && (
                     <button
@@ -674,6 +820,9 @@ export default function App() {
                   <span>Ramp parameter</span>
                   <span className="badge badge-required">Required</span>
                 </div>
+                <div id="ramp-help" className="field-help">
+                  Use the parameter you want to increase in the contract input set; recipients is the default.
+                </div>
                 <div className="field-with-clear">
                   <input
                     className={fieldClasses}
@@ -681,6 +830,7 @@ export default function App() {
                     onChange={(event) => setRamp(event.target.value)}
                     aria-label="Ramp parameter"
                     aria-required="true"
+                    aria-describedby="ramp-help"
                   />
                   {ramp && (
                     <button
@@ -751,8 +901,33 @@ export default function App() {
           </section>
 
           <div className="output">
-            <code>{highlightCommand(generated)}</code>
+            <code data-testid="command-output">{highlightCommand(generated)}</code>
             <button onClick={copy}>{copied ? "Copied" : "Copy"}</button>
+          </div>
+
+          <div className="advanced-command-block">
+            <button type="button" className="button secondary" onClick={toggleAdvancedEditor}>
+              {multilineEditor ? "Hide advanced editor" : "Advanced arguments"}
+            </button>
+            {multilineEditor && (
+              <>
+                <label>
+                  <div className="field-header">
+                    <span>Advanced command editor</span>
+                    <span className="badge badge-optional">Multiline</span>
+                  </div>
+                  <textarea
+                    value={advancedCommand}
+                    rows={8}
+                    onChange={(event) => setAdvancedCommand(event.target.value)}
+                    aria-label="Advanced command arguments"
+                  />
+                </label>
+                <button type="button" className="button primary" onClick={applyAdvancedCommand}>
+                  Apply multiline command
+                </button>
+              </>
+            )}
           </div>
         </div>
 

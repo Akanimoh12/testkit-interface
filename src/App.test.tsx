@@ -1,5 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 
@@ -176,7 +175,7 @@ describe("Visual distinction between required and optional settings (#196)", () 
     fireEvent.click(screen.getByRole("button", { name: "audit" }));
 
     expect(screen.getByLabelText(/fail on warnings/i)).toBeInTheDocument();
-    expect(screen.getByText("Optional")).toBeInTheDocument();
+    expect(screen.getAllByText("Optional").length).toBeGreaterThanOrEqual(1);
   });
 });
 
@@ -209,5 +208,57 @@ describe("Soroban workflow documentation and prerequisites", () => {
     expect(screen.getAllByText(/cargo llvm-?cov/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/workspace members/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/batch_payout/i).length).toBeGreaterThan(0);
+  });
+});
+
+describe("Command builder enhancements", () => {
+  it("allows optional coverage arguments to be reordered", () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Move Open report up" }));
+
+    expect(screen.getByTestId("command-output")).toHaveTextContent(
+      "soroban-testkit coverage . --open --format html",
+    );
+  });
+
+  it("requires confirmation before resetting the customized builder", () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset builder" }));
+    expect(confirmSpy).toHaveBeenCalledWith("Reset the command builder to its default values?");
+    expect(screen.getByTestId("command-output")).toHaveTextContent(
+      "soroban-testkit coverage . --format html --open",
+    );
+
+    confirmSpy.mockReturnValue(true);
+    fireEvent.click(screen.getByRole("button", { name: "Reset builder" }));
+    expect(screen.getByTestId("command-output")).toHaveTextContent(
+      "soroban-testkit coverage . --format html --open",
+    );
+  });
+
+  it("displays contextual help beside function and ramp inputs", () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "limits" }));
+
+    expect(screen.getByText(/Use the exported symbol name from your contract ABI/i)).toBeInTheDocument();
+    expect(screen.getByText(/Use the parameter you want to increase in the contract input set/i)).toBeInTheDocument();
+  });
+
+  it("supports a multiline advanced command editor", () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Advanced arguments" }));
+
+    const textarea = screen.getByLabelText("Advanced command arguments");
+    fireEvent.change(textarea, {
+      target: { value: "soroban-testkit audit ./src --strict" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply multiline command" }));
+
+    expect(screen.getByTestId("command-output")).toHaveTextContent(
+      "soroban-testkit audit ./src --strict",
+    );
   });
 });
