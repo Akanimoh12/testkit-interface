@@ -126,6 +126,31 @@ export default function App() {
     window.setTimeout(() => setCopied(false), 1600);
   };
 
+  const handleWorkflowKeyDown = (
+    event: KeyboardEvent<HTMLButtonElement>,
+    currentIndex: number,
+  ) => {
+    const lastIndex = workflowTabs.length - 1;
+    const nextIndex =
+      event.key === "ArrowRight"
+        ? (currentIndex + 1) % workflowTabs.length
+        : event.key === "ArrowLeft"
+          ? (currentIndex - 1 + workflowTabs.length) % workflowTabs.length
+          : event.key === "Home"
+            ? 0
+            : event.key === "End"
+              ? lastIndex
+              : currentIndex;
+
+    if (nextIndex !== currentIndex) {
+      event.preventDefault();
+      const nextTab = workflowTabs[nextIndex];
+      setActiveWorkflow(nextTab.id);
+      const button = document.getElementById(`workflow-tab-${nextTab.id}`) as HTMLButtonElement | null;
+      button?.focus();
+    }
+  };
+
   return (
     <main>
       <nav>
@@ -212,17 +237,96 @@ export default function App() {
         )}
       </section>
 
+      <section className="docs" aria-label="Soroban workflow documentation">
+        <div className="docs-header">
+          <p className="eyebrow">Prerequisites & tutorials</p>
+          <h2>Supported Rust and Soroban prerequisites</h2>
+        </div>
+
+        <div className="requirements">
+          <ul>
+            <li><strong>Rust:</strong> Rust &gt;= 1.84 with the <code>wasm32v1-none</code> target installed.</li>
+            <li><strong>Soroban SDK:</strong> soroban-sdk 27.0.x for current contract builds and tests.</li>
+            <li><strong>Stellar CLI:</strong> stellar-cli &gt;= 22.0.0 when you need local contract deploy or inspect flows.</li>
+            <li><strong>Build environment:</strong> Cargo workspace with a stable contract crate and optional `cargo llvm-cov` for coverage reports.</li>
+          </ul>
+        </div>
+
+        <div className="workflow-tabs" role="tablist" aria-label="Soroban workflow docs">
+          {workflowTabs.map((tab, index) => (
+            <button
+              key={tab.id}
+              id={`workflow-tab-${tab.id}`}
+              type="button"
+              role="tab"
+              aria-selected={activeWorkflow === tab.id}
+              aria-controls={`workflow-panel-${tab.id}`}
+              tabIndex={activeWorkflow === tab.id ? 0 : -1}
+              className={activeWorkflow === tab.id ? "active" : ""}
+              onClick={() => setActiveWorkflow(tab.id)}
+              onKeyDown={(event) => handleWorkflowKeyDown(event, index)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {workflowTabs.map((tab) => (
+          <div
+            key={tab.id}
+            id={`workflow-panel-${tab.id}`}
+            role="tabpanel"
+            aria-labelledby={`workflow-tab-${tab.id}`}
+            hidden={activeWorkflow !== tab.id}
+            className="workflow-panel"
+          >
+            {tab.id === "coverage" && (
+              <>
+                <h3>Coverage workflow</h3>
+                <p>Start in the contract workspace, install the LLVM coverage tooling, and run every relevant Rust test before exporting HTML or LCOV reports.</p>
+                <pre><code>cargo llvm-cov --workspace --all-features --html
+cargo llvm-cov --workspace --lcov --output-path lcov.info</code></pre>
+              </>
+            )}
+            {tab.id === "workspace" && (
+              <>
+                <h3>Cargo workspace layout</h3>
+                <p>Keep each Soroban contract crate in a single workspace with shared dependencies and explicit workspace members.</p>
+                <pre><code>[workspace]
+members = [
+  "contracts/asset",
+  "contracts/escrow",
+  "contracts/auction",
+]
+resolver = "2"</code></pre>
+              </>
+            )}
+            {tab.id === "limits" && (
+              <>
+                <h3>Resource limits workflow</h3>
+                <p>Compile once, then sweep the function and ramp argument to find the practical limit for batch_payout or any other entrypoint.</p>
+                <pre><code>soroban-testkit limits \
+  --contract target/wasm32v1-none/release/contract.wasm \
+  --fn batch_payout \
+  --ramp recipients</code></pre>
+              </>
+            )}
+          </div>
+        ))}
+      </section>
+
       <section className="commands" id="commands">
         <div className="command-copy">
           <p className="eyebrow">CLI workbench</p>
           <h2>From intent to command.</h2>
           <p>Configure a supported Testkit workflow and copy the exact command to your terminal.</p>
-          <div className="command-tabs" role="tablist">
+          <div className="command-tabs" role="tablist" aria-label="Command workflow selector">
             {(["coverage", "limits", "audit"] as const).map((name) => (
               <button
                 key={name}
                 className={command === name ? "active" : ""}
                 onClick={() => setCommand(name)}
+                aria-pressed={command === name}
               >
                 {name}
               </button>
