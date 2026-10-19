@@ -100,6 +100,41 @@ export const modules = [
 
 const quote = (value: string) => (value.includes(" ") ? `"${value}"` : value);
 
+const getOptionalArgOrder = (options: CommandOptions): OptionalArgKey[] => {
+  if (options.command === "coverage") {
+    return options.optionalArgOrder && options.optionalArgOrder.length > 0
+      ? options.optionalArgOrder
+      : ["format", "open"];
+  }
+
+  if (options.command === "audit") {
+    return options.optionalArgOrder && options.optionalArgOrder.length > 0
+      ? options.optionalArgOrder
+      : ["strict"];
+  }
+
+  return [];
+};
+
+const buildOptionalArgs = (options: CommandOptions): string[] => {
+  const order = getOptionalArgOrder(options);
+  const args: string[] = [];
+
+  for (const key of order) {
+    if (key === "format") {
+      args.push(`--format ${options.format}`);
+    }
+    if (key === "open") {
+      if (options.open) args.push("--open");
+    }
+    if (key === "strict") {
+      if (options.strict) args.push("--strict");
+    }
+  }
+
+  return args;
+};
+
 /**
  * Values `buildCommand` substitutes when a field is left empty. Exported so
  * the workbench can preview the effective command before copying it.
@@ -137,7 +172,7 @@ export function buildCommand(options: CommandOptions): string {
   return [
     "soroban-testkit audit",
     quote(options.path || fallbackValues.auditPath),
-    options.strict && "--strict",
+    ...buildOptionalArgs(options),
   ]
     .filter(Boolean)
     .join(" ");
@@ -152,14 +187,18 @@ export function formatCommandLine(
   }
 
   if (options.command === "coverage") {
-    const args = [
-      "soroban-testkit coverage",
-      ...(options.path ? [`  ${quote(options.path)}`] : []),
-      ...(options.format ? [`  --format ${options.format}`] : []),
-      ...(options.open ? ["  --open"] : []),
-    ];
+    const args: string[] = [];
+    if (options.path) args.push(quote(options.path));
+    args.push(...buildOptionalArgs(options));
 
-    return args.join("\n");
+    if (args.length === 0) {
+      return "soroban-testkit coverage";
+    }
+
+    return [
+      "soroban-testkit coverage \\",
+      ...args.map((arg, index) => `  ${arg}${index < args.length - 1 ? " \\" : ""}`),
+    ].join("\n");
   }
 
   if (options.command === "limits") {
@@ -168,24 +207,22 @@ export function formatCommandLine(
     const ramp = options.ramp || fallbackValues.limitsRamp;
 
     return [
-      "soroban-testkit limits",
-      `  --contract ${contractPath}`,
-      `  --fn ${fn}`,
+      "soroban-testkit limits \\",
+      `  --contract ${contractPath} \\`,
+      `  --fn ${fn} \\`,
       `  --ramp ${ramp}`,
     ].join("\n");
   }
 
   // audit
   const auditPath = quote(options.path || fallbackValues.auditPath);
-  if (options.strict) {
-    return [
-      "soroban-testkit audit \\",
-      `  ${auditPath} \\`,
-      "  --strict",
-    ].join("\n");
-  }
+  const auditArgs = buildOptionalArgs(options).map((arg) => `  ${arg}`);
 
-  return args.join("\n");
+  return [
+    "soroban-testkit audit \\",
+    `  ${auditPath}${auditArgs.length > 0 ? " \\" : ""}`,
+    ...auditArgs.map((arg, index) => `${arg}${index < auditArgs.length - 1 ? " \\" : ""}`),
+  ].join("\n");
 }
 
 // Issue #140: Export configuration as JSON
@@ -306,6 +343,187 @@ export function importConfigFromJson(jsonString: string): {
   const options = config.options as CommandOptions;
 
   return { options, validation };
+}
+
+export interface EffectiveDefaultRow {
+  key: "path" | "fn" | "ramp";
+  label: string;
+  input: string;
+  value: string;
+  applied: boolean;
+}
+
+/**
+ * Lists the fields of the active workflow whose empty input falls back to a
+ * default, with the value the generated command will actually use.
+ */
+export function effectiveDefaults(options: CommandOptions): EffectiveDefaultRow[] {
+  if (options.command === "limits") {
+    return [
+      {
+        key: "path",
+        label: "Contract artifact",
+        input: options.path,
+        value: options.path || fallbackValues.limitsContract,
+        applied: options.path === "",
+      },
+      {
+        key: "fn",
+        label: "Function",
+        input: options.fn,
+        value: options.fn || fallbackValues.limitsFunction,
+        applied: options.fn === "",
+      },
+      {
+        key: "ramp",
+        label: "Ramp parameter",
+        input: options.ramp,
+        value: options.ramp || fallbackValues.limitsRamp,
+        applied: options.ramp === "",
+      },
+    ];
+  }
+
+  if (options.command === "audit") {
+    return [
+      {
+        key: "path",
+        label: "Project path",
+        input: options.path,
+        value: options.path || fallbackValues.auditPath,
+        applied: options.path === "",
+      },
+    ];
+  }
+
+  return [];
+}
+
+export interface SettingSummaryRow {
+  label: string;
+  value: string;
+}
+
+/**
+ * Human-readable recap of the settings the active workflow will run with.
+ * Falls back to the same defaults `buildCommand` applies, marked "(default)".
+ */
+export function summarizeConfiguration(
+  options: CommandOptions,
+): SettingSummaryRow[] {
+  if (options.command === "coverage") {
+    return [
+      { label: "Project or contract path", value: options.path || "(omitted)" },
+      { label: "Report format", value: options.format },
+      { label: "Open report when complete", value: options.open ? "On" : "Off" },
+    ];
+  }
+
+  if (options.command === "limits") {
+    return [
+      {
+        label: "Contract artifact",
+        value: options.path || `${fallbackValues.limitsContract} (default)`,
+      },
+      {
+        label: "Function",
+        value: options.fn || `${fallbackValues.limitsFunction} (default)`,
+      },
+      {
+        label: "Ramp parameter",
+        value: options.ramp || `${fallbackValues.limitsRamp} (default)`,
+      },
+    ];
+  }
+
+  return [
+    {
+      label: "Project path",
+      value: options.path || `${fallbackValues.auditPath} (default)`,
+    },
+    { label: "Fail on warnings", value: options.strict ? "On" : "Off" },
+  ];
+}
+
+export interface ComparisonRow {
+  key: string;
+  label: string;
+  a: string;
+  b: string;
+  changed: boolean;
+}
+
+/**
+ * Compares two configurations setting by setting. Rows are included when the
+ * setting applies to either side; sides that do not use the setting read
+ * "n/a" and empty values read "(empty)".
+ */
+export function compareConfigurations(
+  a: CommandOptions,
+  b: CommandOptions,
+): ComparisonRow[] {
+  const usesCoverage = a.command === "coverage" || b.command === "coverage";
+  const usesLimits = a.command === "limits" || b.command === "limits";
+  const usesAudit = a.command === "audit" || b.command === "audit";
+
+  const fields: Array<{
+    key: string;
+    label: string;
+    applicable: boolean;
+    value: (options: CommandOptions) => string;
+  }> = [
+    { key: "command", label: "Workflow", applicable: true, value: (o) => o.command },
+    {
+      key: "path",
+      label: "Project or contract path",
+      applicable: true,
+      value: (o) => o.path || "(empty)",
+    },
+    {
+      key: "format",
+      label: "Report format",
+      applicable: usesCoverage,
+      value: (o) => (o.command === "coverage" ? o.format : "n/a"),
+    },
+    {
+      key: "open",
+      label: "Open report when complete",
+      applicable: usesCoverage,
+      value: (o) => (o.command === "coverage" ? (o.open ? "On" : "Off") : "n/a"),
+    },
+    {
+      key: "fn",
+      label: "Function",
+      applicable: usesLimits,
+      value: (o) => (o.command === "limits" ? o.fn || "(empty)" : "n/a"),
+    },
+    {
+      key: "ramp",
+      label: "Ramp parameter",
+      applicable: usesLimits,
+      value: (o) => (o.command === "limits" ? o.ramp || "(empty)" : "n/a"),
+    },
+    {
+      key: "strict",
+      label: "Fail on warnings",
+      applicable: usesAudit,
+      value: (o) => (o.command === "audit" ? (o.strict ? "On" : "Off") : "n/a"),
+    },
+  ];
+
+  return fields
+    .filter((field) => field.applicable)
+    .map((field) => {
+      const aValue = field.value(a);
+      const bValue = field.value(b);
+      return {
+        key: field.key,
+        label: field.label,
+        a: aValue,
+        b: bValue,
+        changed: aValue !== bValue,
+      };
+    });
 }
 
 export interface CliCompatibility {

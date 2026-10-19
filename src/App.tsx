@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   buildCommand,
   formatCommandLine,
@@ -16,6 +16,179 @@ const descriptions: Record<CommandName, string> = {
 
 const defaultCoverageOrder: OptionalArgKey[] = ["format", "open"];
 
+const optionalArgumentRows = [
+  { key: "format" as const, label: "Format", summary: "--format html" },
+  { key: "open" as const, label: "Open report", summary: "--open" },
+];
+
+const workflowTabs = [
+  { id: "coverage", label: "Coverage workflow" },
+  { id: "workspace", label: "Cargo workspace" },
+  { id: "limits", label: "Resource limits" },
+] as const;
+
+type WorkflowTabId = (typeof workflowTabs)[number]["id"];
+
+interface CommandOptions {
+  command: CommandName;
+  path: string;
+  format: "html" | "lcov" | "text";
+  open: boolean;
+  fn: string;
+  ramp: string;
+  strict: boolean;
+  shell?: "bash" | "zsh" | "fish" | "sh";
+  optionalArgOrder?: OptionalArgKey[];
+}
+
+interface SummaryRow {
+  label: string;
+  value: string;
+}
+
+interface DefaultRow {
+  key: string;
+  label: string;
+  value: string;
+  applied: boolean;
+}
+
+interface ComparisonRow {
+  key: string;
+  label: string;
+  a: string;
+  b: string;
+  changed: boolean;
+}
+
+const installationSteps = [
+  {
+    title: "Install Rust",
+    description: "Download and install the Rust toolchain",
+    command: "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh",
+  },
+  {
+    title: "Add wasm32 target",
+    description: "Install the WebAssembly compilation target",
+    command: "rustup target add wasm32v1-none",
+  },
+  {
+    title: "Install Soroban CLI",
+    description: "Get the Stellar command-line tools",
+    command: "cargo install stellar-cli",
+  },
+  {
+    title: "Install cargo-llvm-cov",
+    description: "Tool for generating coverage reports",
+    command: "cargo install cargo-llvm-cov",
+  },
+  {
+    title: "Clone Testkit",
+    description: "Get the latest Soroban Testkit repository",
+    command: "git clone https://github.com/soroban-testkit/testkit-blockchain",
+  },
+  {
+    title: "Install Testkit CLI",
+    description: "Build and install the testkit command",
+    command: "cargo install --path testkit-blockchain/crates/cli",
+  },
+];
+
+function summarizeConfiguration(options: CommandOptions): SummaryRow[] {
+  const rows: SummaryRow[] = [{ label: "Workflow", value: options.command }];
+  if (options.path) rows.push({ label: "Path", value: options.path });
+  if (options.command === "coverage" && options.format) {
+    rows.push({ label: "Format", value: options.format });
+    if (options.open) rows.push({ label: "Open report", value: "Yes" });
+  }
+  if (options.command === "limits") {
+    rows.push({ label: "Function", value: options.fn });
+    rows.push({ label: "Ramp", value: options.ramp });
+  }
+  if (options.command === "audit" && options.strict) {
+    rows.push({ label: "Strict mode", value: "Enabled" });
+  }
+  return rows;
+}
+
+function effectiveDefaults(options: CommandOptions): DefaultRow[] {
+  const rows: DefaultRow[] = [];
+  if (options.command === "coverage") {
+    if (!options.format) {
+      rows.push({ key: "format", label: "Format", value: "html", applied: true });
+    }
+  }
+  if (options.command === "limits") {
+    if (!options.path) {
+      rows.push({
+        key: "contract",
+        label: "Contract",
+        value: "target/wasm32v1-none/release/contract.wasm",
+        applied: true,
+      });
+    }
+    if (!options.fn) {
+      rows.push({ key: "fn", label: "Function", value: "batch_payout", applied: true });
+    }
+    if (!options.ramp) {
+      rows.push({ key: "ramp", label: "Ramp", value: "recipients", applied: true });
+    }
+  }
+  if (options.command === "audit" && !options.path) {
+    rows.push({ key: "path", label: "Path", value: "./src", applied: true });
+  }
+  return rows;
+}
+
+function compareConfigurations(a: CommandOptions, b: CommandOptions): ComparisonRow[] {
+  return [
+    { key: "command", label: "Workflow", a: a.command, b: b.command, changed: a.command !== b.command },
+    { key: "path", label: "Path", a: a.path, b: b.path, changed: a.path !== b.path },
+    { key: "format", label: "Format", a: a.format, b: b.format, changed: a.format !== b.format },
+    { key: "shell", label: "Shell", a: a.shell || "default", b: b.shell || "default", changed: a.shell !== b.shell },
+  ];
+}
+
+function highlightCommand(command: string): React.ReactNode {
+  const parts: React.ReactNode[] = [];
+  const regex = /(\s+|--|[^\s]+)/g;
+  let match;
+  let index = 0;
+
+  while ((match = regex.exec(command)) !== null) {
+    const text = match[0];
+    if (/^\s+$/.test(text)) {
+      parts.push(text);
+    } else if (text.startsWith("--")) {
+      parts.push(
+        <span key={index} className="syntax-flag">
+          {text}
+        </span>
+      );
+    } else if (/^(soroban-testkit|coverage|limits|audit)$/.test(text)) {
+      parts.push(
+        <span key={index} className="syntax-command">
+          {text}
+        </span>
+      );
+    } else if (/^(html|lcov|text|batch_payout|recipients)$/.test(text)) {
+      parts.push(
+        <span key={index} className="syntax-value">
+          {text}
+        </span>
+      );
+    } else {
+      parts.push(
+        <span key={index} className="syntax-path">
+          {text}
+        </span>
+      );
+    }
+    index++;
+  }
+  return parts;
+}
+
 export default function App() {
   const [command, setCommand] = useState<CommandName>("coverage");
   const [path, setPath] = useState(".");
@@ -24,35 +197,81 @@ export default function App() {
   const [fn, setFn] = useState("batch_payout");
   const [ramp, setRamp] = useState("recipients");
   const [strict, setStrict] = useState(true);
+  const [shell, setShell] = useState<"bash" | "zsh" | "fish" | "sh">("bash");
   const [copied, setCopied] = useState(false);
   const [copiedStep, setCopiedStep] = useState<number | null>(null);
   const [moduleFilter, setModuleFilter] = useState("");
   const [coverageOrder, setCoverageOrder] = useState<OptionalArgKey[]>(defaultCoverageOrder);
   const [multilineEditor, setMultilineEditor] = useState(false);
   const [advancedCommand, setAdvancedCommand] = useState("");
+  const [activeWorkflow, setActiveWorkflow] = useState<WorkflowTabId>("coverage");
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [configB, setConfigB] = useState<CommandOptions | null>(null);
+  const [coverageGuideOpen, setCoverageGuideOpen] = useState(false);
+  const [auditGuideOpen, setAuditGuideOpen] = useState(false);
+  const comparePanelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+
+      switch (event.key) {
+        case "1":
+          document.getElementById("top")?.scrollIntoView({ behavior: "smooth" });
+          break;
+        case "2":
+          document.getElementById("install")?.scrollIntoView({ behavior: "smooth" });
+          break;
+        case "3":
+          document.getElementById("modules")?.scrollIntoView({ behavior: "smooth" });
+          break;
+        case "4":
+          document.getElementById("commands")?.scrollIntoView({ behavior: "smooth" });
+          break;
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const options = useMemo<CommandOptions>(
-    () => ({ command, path, format, open, fn, ramp, strict }),
-    [command, path, format, open, fn, ramp, strict],
+    () => ({
+      command,
+      path,
+      format,
+      open,
+      fn,
+      ramp,
+      strict,
+      shell,
+      optionalArgOrder:
+        command === "coverage" ? coverageOrder : command === "audit" ? ["strict"] : undefined,
+    }),
+    [command, path, format, open, fn, ramp, strict, shell, coverageOrder]
   );
 
   const generated = useMemo(() => buildCommand(options), [options]);
 
+  const toggleAdvancedEditor = () => {
+    if (multilineEditor) {
+      setMultilineEditor(false);
+      return;
+    }
+    setAdvancedCommand(formatCommandLine(options, true));
+    setMultilineEditor(true);
+  };
   const summaryRows = useMemo(() => summarizeConfiguration(options), [options]);
   const defaultRows = useMemo(() => effectiveDefaults(options), [options]);
   const appliedDefaults = defaultRows.filter((row) => row.applied).length;
-  const configBCommand = useMemo(
-    () => (configB ? buildCommand(configB) : ""),
-    [configB],
-  );
+  const configBCommand = useMemo(() => (configB ? buildCommand(configB) : ""), [configB]);
   const comparisonRows = useMemo(
     () => (configB ? compareConfigurations(options, configB) : []),
-    [options, configB],
+    [options, configB]
   );
 
   useEffect(() => {
-    if (compareOpen) {
-      comparePanelRef.current?.focus();
+    if (compareOpen && comparePanelRef.current) {
+      comparePanelRef.current.focus();
     }
   }, [compareOpen]);
 
@@ -61,9 +280,72 @@ export default function App() {
     if (!q) return modules;
     return modules.filter(
       ([name, description]) =>
-        name.toLowerCase().includes(q) || description.toLowerCase().includes(q),
+        name.toLowerCase().includes(q) || description.toLowerCase().includes(q)
     );
   }, [moduleFilter]);
+
+  const moveOptionalArg = (key: OptionalArgKey, direction: "up" | "down") => {
+    setCoverageOrder((current) => {
+      const index = current.indexOf(key);
+      if (index < 0) return current;
+      const nextIndex = direction === "up" ? index - 1 : index + 1;
+      if (nextIndex < 0 || nextIndex >= current.length) return current;
+      const next = [...current];
+      [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+      return next;
+    });
+  };
+
+  const resetBuilder = () => {
+    if (!window.confirm("Reset the command builder to its default values?")) return;
+    setCommand("coverage");
+    setPath(".");
+    setFormat("html");
+    setOpen(true);
+    setFn("batch_payout");
+    setRamp("recipients");
+    setStrict(true);
+    setShell("bash");
+    setCoverageOrder(defaultCoverageOrder);
+    setMultilineEditor(false);
+  };
+
+  const applyAdvancedCommand = () => {
+    const tokens = advancedCommand.match(/"[^"]+"|'[^']+'|[^\s]+/g) ?? [];
+    if (tokens.length === 0) return;
+
+    const [tool, selectedCommand, ...args] = tokens;
+    if (tool !== "soroban-testkit") return;
+
+    if (selectedCommand === "coverage") setCommand("coverage");
+    if (selectedCommand === "limits") setCommand("limits");
+    if (selectedCommand === "audit") setCommand("audit");
+
+    const stripQuotes = (value: string) => value.replace(/^["']|["']$/g, "");
+
+    for (let index = 0; index < args.length; index += 1) {
+      const token = args[index];
+      if (token === "--format" && args[index + 1]) {
+        setFormat(args[index + 1] as "html" | "lcov" | "text");
+        index += 1;
+      } else if (token === "--open") {
+        setOpen(true);
+      } else if ((token === "--contract" || token === "--path") && args[index + 1]) {
+        setPath(stripQuotes(args[index + 1]));
+        index += 1;
+      } else if (token === "--fn" && args[index + 1]) {
+        setFn(stripQuotes(args[index + 1]));
+        index += 1;
+      } else if (token === "--ramp" && args[index + 1]) {
+        setRamp(stripQuotes(args[index + 1]));
+        index += 1;
+      } else if (token === "--strict") {
+        setStrict(true);
+      } else if (!token.startsWith("--")) {
+        setPath(stripQuotes(token));
+      }
+    }
+  };
 
   const copy = async () => {
     await copyToClipboard(generated);
@@ -71,10 +353,26 @@ export default function App() {
     window.setTimeout(() => setCopied(false), 1600);
   };
 
-  const handleWorkflowKeyDown = (
-    event: KeyboardEvent<HTMLButtonElement>,
-    currentIndex: number,
-  ) => {
+  const copyStep = async (index: number, stepCommand: string) => {
+    await copyToClipboard(stepCommand);
+    setCopiedStep(index);
+    window.setTimeout(() => setCopiedStep(null), 1600);
+  };
+
+  const toggleComparison = () => {
+    if (!compareOpen) {
+      setConfigB({ ...options });
+    }
+    setCompareOpen(!compareOpen);
+  };
+
+  const updateConfigB = (updates: Partial<CommandOptions>) => {
+    if (configB) {
+      setConfigB({ ...configB, ...updates });
+    }
+  };
+
+  const handleWorkflowKeyDown = (event: KeyboardEvent<HTMLButtonElement>, currentIndex: number) => {
     const lastIndex = workflowTabs.length - 1;
     const nextIndex =
       event.key === "ArrowRight"
@@ -96,6 +394,8 @@ export default function App() {
     }
   };
 
+  const fieldClasses = "field-input";
+
   return (
     <main>
       <nav>
@@ -114,19 +414,41 @@ export default function App() {
       <section className="hero" id="top">
         <div>
           <p className="eyebrow">Contract testing, without the repeated scaffolding</p>
-          <h1>Break the contract<br />before users do.</h1>
+          <h1>
+            Break the contract
+            <br />
+            before users do.
+          </h1>
           <p className="lede">
-            Build precise Soroban tests with deterministic environments, adversarial
-            money inputs, typed event assertions, and ledger-time control.
+            Build precise Soroban tests with deterministic environments, adversarial money inputs, typed event
+            assertions, and ledger-time control.
           </p>
           <div className="actions">
-            <a className="button primary" href="#commands">Build a command</a>
-            <a className="button secondary" href="#modules">Explore modules</a>
+            <a className="button primary" href="#commands">
+              Build a command
+            </a>
+            <a className="button secondary" href="#modules">
+              Explore modules
+            </a>
           </div>
         </div>
         <div className="terminal" aria-label="Example Soroban test">
-          <div className="terminal-top"><i /><i /><i /><span>escrow_test.rs</span></div>
-          <pre><code><span className="muted">use</span> soroban_testkit::prelude::*;{"\n\n"}<span className="muted">let</span> env = TestEnv::new();{"\n"}<span className="muted">let</span> token = env.token();{"\n"}<span className="muted">let</span> buyer = env.address();{"\n\n"}token.mint(&buyer, <b>100</b>);{"\n"}token.assert_balance(&buyer, <b>100</b>);</code></pre>
+          <div className="terminal-top">
+            <i />
+            <i />
+            <i />
+            <span>escrow_test.rs</span>
+          </div>
+          <pre>
+            <code>
+              <span className="muted">use</span> soroban_testkit::prelude::*;{"\n\n"}
+              <span className="muted">let</span> env = TestEnv::new();{"\n"}
+              <span className="muted">let</span> token = env.token();{"\n"}
+              <span className="muted">let</span> buyer = env.address();{"\n\n"}
+              token.mint(&buyer, <b>100</b>);{"\n"}
+              token.assert_balance(&buyer, <b>100</b>);
+            </code>
+          </pre>
           <div className="pass">✓ test result: ok</div>
         </div>
       </section>
@@ -136,8 +458,8 @@ export default function App() {
           <p className="eyebrow">First-time setup</p>
           <h2 id="install-heading">From a clean machine to your first command.</h2>
           <p className="install-intro">
-            Six ordered steps install the Testkit CLI and its prerequisites. Every
-            step runs locally and keeps contract tests deterministic and offline.
+            Six ordered steps install the Testkit CLI and its prerequisites. Every step runs locally and keeps
+            contract tests deterministic and offline.
           </p>
         </header>
         <ol className="install-steps">
@@ -168,7 +490,9 @@ export default function App() {
           <p className="eyebrow">One prelude. Seven focused modules.</p>
           <h2>Everything a serious contract test needs.</h2>
           <div className="module-filter-bar">
-            <label htmlFor="module-search" className="sr-only">Filter modules</label>
+            <label htmlFor="module-search" className="sr-only">
+              Filter modules
+            </label>
             <input
               id="module-search"
               type="search"
@@ -195,13 +519,17 @@ export default function App() {
           <div className="module-grid" id="module-grid">
             {filteredModules.map(([name, description], index) => (
               <article key={name}>
-                <span>0{index + 1}</span><h3>{name}</h3><p>{description}</p>
+                <span>0{index + 1}</span>
+                <h3>{name}</h3>
+                <p>{description}</p>
               </article>
             ))}
           </div>
         ) : (
           <div className="module-empty-state" role="status" aria-live="polite">
-            <div className="module-empty-icon" aria-hidden="true">∅</div>
+            <div className="module-empty-icon" aria-hidden="true">
+              ∅
+            </div>
             <h3>No modules match &ldquo;{moduleFilter}&rdquo;</h3>
             <p>No testing modules found matching your filter criteria. Try adjusting your search term.</p>
             <button
@@ -223,10 +551,20 @@ export default function App() {
 
         <div className="requirements">
           <ul>
-            <li><strong>Rust:</strong> Rust &gt;= 1.84 with the <code>wasm32v1-none</code> target installed.</li>
-            <li><strong>Soroban SDK:</strong> soroban-sdk 27.0.x for current contract builds and tests.</li>
-            <li><strong>Stellar CLI:</strong> stellar-cli &gt;= 22.0.0 when you need local contract deploy or inspect flows.</li>
-            <li><strong>Build environment:</strong> Cargo workspace with a stable contract crate and optional `cargo llvm-cov` for coverage reports.</li>
+            <li>
+              <strong>Rust:</strong> Rust &gt;= 1.84 with the <code>wasm32v1-none</code> target installed.
+            </li>
+            <li>
+              <strong>Soroban SDK:</strong> soroban-sdk 27.0.x for current contract builds and tests.
+            </li>
+            <li>
+              <strong>Stellar CLI:</strong> stellar-cli &gt;= 22.0.0 when you need local contract deploy or
+              inspect flows.
+            </li>
+            <li>
+              <strong>Build environment:</strong> Cargo workspace with a stable contract crate and optional
+              `cargo llvm-cov` for coverage reports.
+            </li>
           </ul>
         </div>
 
@@ -261,32 +599,50 @@ export default function App() {
             {tab.id === "coverage" && (
               <>
                 <h3>Coverage workflow</h3>
-                <p>Start in the contract workspace, install the LLVM coverage tooling, and run every relevant Rust test before exporting HTML or LCOV reports.</p>
-                <pre><code>cargo llvm-cov --workspace --all-features --html
-cargo llvm-cov --workspace --lcov --output-path lcov.info</code></pre>
+                <p>
+                  Start in the contract workspace, install the LLVM coverage tooling, and run every relevant
+                  Rust test before exporting HTML or LCOV reports.
+                </p>
+                <pre>
+                  <code>
+                    cargo llvm-cov --workspace --all-features --html{"\n"}
+                    cargo llvm-cov --workspace --lcov --output-path lcov.info
+                  </code>
+                </pre>
               </>
             )}
             {tab.id === "workspace" && (
               <>
                 <h3>Cargo workspace layout</h3>
                 <p>Keep each Soroban contract crate in a single workspace with shared dependencies and explicit workspace members.</p>
-                <pre><code>[workspace]
-members = [
-  "contracts/asset",
-  "contracts/escrow",
-  "contracts/auction",
-]
-resolver = "2"</code></pre>
+                <pre>
+                  <code>
+                    [workspace]{"\n"}
+                    members = [{"\n"}
+                    {"  "}"contracts/asset",{"\n"}
+                    {"  "}"contracts/escrow",{"\n"}
+                    {"  "}"contracts/auction",{"\n"}
+                    ]{"\n"}
+                    resolver = "2"
+                  </code>
+                </pre>
               </>
             )}
             {tab.id === "limits" && (
               <>
                 <h3>Resource limits workflow</h3>
-                <p>Compile once, then sweep the function and ramp argument to find the practical limit for batch_payout or any other entrypoint.</p>
-                <pre><code>soroban-testkit limits \
-  --contract target/wasm32v1-none/release/contract.wasm \
-  --fn batch_payout \
-  --ramp recipients</code></pre>
+                <p>
+                  Compile once, then sweep the function and ramp argument to find the practical limit for
+                  batch_payout or any other entrypoint.
+                </p>
+                <pre>
+                  <code>
+                    soroban-testkit limits \{"\n"}
+                    {"  "}--contract target/wasm32v1-none/release/contract.wasm \{"\n"}
+                    {"  "}--fn batch_payout \{"\n"}
+                    {"  "}--ramp recipients
+                  </code>
+                </pre>
               </>
             )}
           </div>
@@ -311,6 +667,11 @@ resolver = "2"</code></pre>
             ))}
           </div>
           <p className="description">{descriptions[command]}</p>
+          <div className="command-actions">
+            <button type="button" className="button secondary" onClick={resetBuilder}>
+              Reset builder
+            </button>
+          </div>
 
           <section className="summary-card" aria-labelledby="command-summary-heading">
             <h3 id="command-summary-heading">Command summary</h3>
@@ -324,8 +685,7 @@ resolver = "2"</code></pre>
               ))}
             </dl>
             <p className="summary-note">
-              Updates live from the builder. Values marked (default) apply when a
-              field is left empty.
+              Updates live from the builder. Values marked (default) apply when a field is left empty.
             </p>
           </section>
 
@@ -365,124 +725,149 @@ resolver = "2"</code></pre>
               )}
             </div>
           </label>
-          {command === "coverage" && <>
-            <div className="field-group">
-              <div className="field-header">
-                <span>Optional arguments</span>
-                <span className="badge badge-optional">Reorder</span>
-              </div>
-              <div className="argument-order-list" aria-label="Optional argument order">
-                {[
-                  { key: "format" as const, label: "Format", summary: "--format html" },
-                  { key: "open" as const, label: "Open report", summary: "--open" },
-                ].map((arg, index, all) => {
-                  const selected = coverageOrder.includes(arg.key);
-                  const currentIndex = coverageOrder.indexOf(arg.key);
-                  return (
-                    <div key={arg.key} className="argument-order-row">
-                      <span className="argument-order-name">{arg.label}</span>
-                      <span className="argument-order-summary">{arg.summary}</span>
-                      <div className="argument-order-controls">
-                        <button
-                          type="button"
-                          onClick={() => moveOptionalArg(arg.key, "up")}
-                          disabled={currentIndex <= 0 || !selected}
-                          aria-label={`Move ${arg.label} up`}
-                        >
-                          ↑
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => moveOptionalArg(arg.key, "down")}
-                          disabled={currentIndex === -1 || currentIndex >= all.length - 1}
-                          aria-label={`Move ${arg.label} down`}
-                        >
-                          ↓
-                        </button>
+          {command === "coverage" && (
+            <>
+              <div className="field-group">
+                <div className="field-header">
+                  <span>Optional arguments</span>
+                  <span className="badge badge-optional">Reorder</span>
+                </div>
+                <div className="argument-order-list" aria-label="Optional argument order">
+                  {optionalArgumentRows.map((arg) => {
+                    const selected = coverageOrder.includes(arg.key);
+                    const currentIndex = coverageOrder.indexOf(arg.key);
+                    const lastIndex = optionalArgumentRows.length - 1;
+                    return (
+                      <div key={arg.key} className="argument-order-row">
+                        <span className="argument-order-name">{arg.label}</span>
+                        <span className="argument-order-summary">{arg.summary}</span>
+                        <div className="argument-order-controls">
+                          <button
+                            type="button"
+                            onClick={() => moveOptionalArg(arg.key, "up")}
+                            disabled={currentIndex <= 0 || !selected}
+                            aria-label={`Move ${arg.label} up`}
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveOptionalArg(arg.key, "down")}
+                            disabled={currentIndex === -1 || currentIndex >= lastIndex}
+                            aria-label={`Move ${arg.label} down`}
+                          >
+                            ↓
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-            <label>
-              <div className="field-header">
-                <span>Report format</span>
+              <label>
+                <div className="field-header">
+                  <span>Report format</span>
+                  <span className="badge badge-optional">Optional</span>
+                </div>
+                <select value={format} onChange={(event) => setFormat(event.target.value as typeof format)}>
+                  <option>html</option>
+                  <option>lcov</option>
+                  <option>text</option>
+                </select>
+              </label>
+              <label className="check">
+                <span className="check-content">
+                  <input type="checkbox" checked={open} onChange={(event) => setOpen(event.target.checked)} />
+                  <span>Open report when complete</span>
+                </span>
                 <span className="badge badge-optional">Optional</span>
-              </div>
-              <select value={format} onChange={(event) => setFormat(event.target.value as typeof format)}>
-                <option>html</option>
-                <option>lcov</option>
-                <option>text</option>
-              </select>
-            </label>
+              </label>
+            </>
+          )}
+          {command === "limits" && (
+            <div className="row">
+              <label>
+                <div className="field-header">
+                  <span>Function</span>
+                  <span className="badge badge-required">Required</span>
+                </div>
+                <div id="fn-help" className="field-help">
+                  Use the exported symbol name from your contract ABI, such as batch_payout.
+                </div>
+                <div className="field-with-clear">
+                  <input
+                    className={fieldClasses}
+                    value={fn}
+                    onChange={(event) => setFn(event.target.value)}
+                    aria-label="Function"
+                    aria-required="true"
+                    aria-describedby="fn-help"
+                  />
+                  {fn && (
+                    <button
+                      type="button"
+                      className="clear-field-button"
+                      onClick={() => setFn("")}
+                      aria-label="Clear"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </label>
+              <label>
+                <div className="field-header">
+                  <span>Ramp parameter</span>
+                  <span className="badge badge-required">Required</span>
+                </div>
+                <div id="ramp-help" className="field-help">
+                  Use the parameter you want to increase in the contract input set; recipients is the default.
+                </div>
+                <div className="field-with-clear">
+                  <input
+                    className={fieldClasses}
+                    value={ramp}
+                    onChange={(event) => setRamp(event.target.value)}
+                    aria-label="Ramp parameter"
+                    aria-required="true"
+                    aria-describedby="ramp-help"
+                  />
+                  {ramp && (
+                    <button
+                      type="button"
+                      className="clear-field-button"
+                      onClick={() => setRamp("")}
+                      aria-label="Clear"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </label>
+            </div>
+          )}
+          {command === "audit" && (
             <label className="check">
               <span className="check-content">
-                <input type="checkbox" checked={open} onChange={(event) => setOpen(event.target.checked)} />
-                <span>Open report when complete</span>
+                <input type="checkbox" checked={strict} onChange={(event) => setStrict(event.target.checked)} />
+                <span>Fail on warnings</span>
               </span>
               <span className="badge badge-optional">Optional</span>
             </label>
-          </>}
-          {command === "limits" && <div className="row">
-            <label>
-              <div className="field-header">
-                <span>Function</span>
-                <span className="badge badge-required">Required</span>
-              </div>
-              <div className="field-with-clear">
-                <input
-                  className={fieldClasses}
-                  value={fn}
-                  onChange={(event) => setFn(event.target.value)}
-                  aria-label="Function"
-                  aria-required="true"
-                />
-                {fn && (
-                  <button
-                    type="button"
-                    className="clear-field-button"
-                    onClick={() => setFn("")}
-                    aria-label="Clear"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-            </label>
-            <label>
-              <div className="field-header">
-                <span>Ramp parameter</span>
-                <span className="badge badge-required">Required</span>
-              </div>
-              <div className="field-with-clear">
-                <input
-                  className={fieldClasses}
-                  value={ramp}
-                  onChange={(event) => setRamp(event.target.value)}
-                  aria-label="Ramp parameter"
-                  aria-required="true"
-                />
-                {ramp && (
-                  <button
-                    type="button"
-                    className="clear-field-button"
-                    onClick={() => setRamp("")}
-                    aria-label="Clear"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-            </label>
-          </div>}
-          {command === "audit" && <label className="check">
-            <span className="check-content">
-              <input type="checkbox" checked={strict} onChange={(event) => setStrict(event.target.checked)} />
-              <span>Fail on warnings</span>
-            </span>
-            <span className="badge badge-optional">Optional</span>
-          </label>}
+          )}
+
+          <label>
+            <div className="field-header">
+              <span>Shell target</span>
+              <span className="badge badge-optional">Optional</span>
+            </div>
+            <select value={shell} onChange={(event) => setShell(event.target.value as typeof shell)}>
+              <option value="bash">Bash</option>
+              <option value="zsh">Zsh</option>
+              <option value="fish">Fish</option>
+              <option value="sh">POSIX sh</option>
+            </select>
+          </label>
 
           <section className="defaults-preview" aria-labelledby="defaults-preview-heading">
             <div className="defaults-preview-header">
@@ -495,8 +880,8 @@ resolver = "2"</code></pre>
             </div>
             {defaultRows.length === 0 ? (
               <p className="defaults-empty">
-                This workflow has no empty-field fallbacks. The copied command uses
-                the values you set above, exactly.
+                This workflow has no empty-field fallbacks. The copied command uses the values you set above,
+                exactly.
               </p>
             ) : (
               <dl className="defaults-list">
@@ -515,7 +900,35 @@ resolver = "2"</code></pre>
             )}
           </section>
 
-          <div className="output"><code>{generated}</code><button onClick={copy}>{copied ? "Copied" : "Copy"}</button></div>
+          <div className="output">
+            <code data-testid="command-output">{highlightCommand(generated)}</code>
+            <button onClick={copy}>{copied ? "Copied" : "Copy"}</button>
+          </div>
+
+          <div className="advanced-command-block">
+            <button type="button" className="button secondary" onClick={toggleAdvancedEditor}>
+              {multilineEditor ? "Hide advanced editor" : "Advanced arguments"}
+            </button>
+            {multilineEditor && (
+              <>
+                <label>
+                  <div className="field-header">
+                    <span>Advanced command editor</span>
+                    <span className="badge badge-optional">Multiline</span>
+                  </div>
+                  <textarea
+                    value={advancedCommand}
+                    rows={8}
+                    onChange={(event) => setAdvancedCommand(event.target.value)}
+                    aria-label="Advanced command arguments"
+                  />
+                </label>
+                <button type="button" className="button primary" onClick={applyAdvancedCommand}>
+                  Apply multiline command
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         {compareOpen && configB && (
@@ -529,9 +942,8 @@ resolver = "2"</code></pre>
             <div className="comparison-header">
               <h3 id="comparison-heading">Compare two configurations</h3>
               <p>
-                Configuration A is the workbench above. Edit configuration B and the
-                table marks every setting that differs; both commands update as you
-                type.
+                Configuration A is the workbench above. Edit configuration B and the table marks every setting
+                that differs; both commands update as you type.
               </p>
             </div>
 
@@ -539,12 +951,12 @@ resolver = "2"</code></pre>
               <legend>Configuration B</legend>
               <div className="row">
                 <label>
-                  <div className="field-header"><span>Workflow</span></div>
+                  <div className="field-header">
+                    <span>Workflow</span>
+                  </div>
                   <select
                     value={configB.command}
-                    onChange={(event) =>
-                      updateConfigB({ command: event.target.value as CommandName })
-                    }
+                    onChange={(event) => updateConfigB({ command: event.target.value as CommandName })}
                   >
                     <option value="coverage">coverage</option>
                     <option value="limits">limits</option>
@@ -572,9 +984,7 @@ resolver = "2"</code></pre>
                     </div>
                     <select
                       value={configB.format}
-                      onChange={(event) =>
-                        updateConfigB({ format: event.target.value as CommandOptions["format"] })
-                      }
+                      onChange={(event) => updateConfigB({ format: event.target.value as CommandOptions["format"] })}
                     >
                       <option>html</option>
                       <option>lcov</option>
@@ -633,6 +1043,18 @@ resolver = "2"</code></pre>
                   <span className="badge badge-optional">Optional</span>
                 </label>
               )}
+              <label>
+                <div className="field-header">
+                  <span>Shell target</span>
+                  <span className="badge badge-optional">Optional</span>
+                </div>
+                <select value={configB.shell || "bash"} onChange={(event) => updateConfigB({ shell: event.target.value as typeof shell })}>
+                  <option value="bash">Bash</option>
+                  <option value="zsh">Zsh</option>
+                  <option value="fish">Fish</option>
+                  <option value="sh">POSIX sh</option>
+                </select>
+              </label>
               <button
                 type="button"
                 className="button secondary comparison-sync"
@@ -642,12 +1064,7 @@ resolver = "2"</code></pre>
               </button>
             </fieldset>
 
-            <div
-              className="comparison-table-wrap"
-              role="region"
-              aria-label="Configuration differences"
-              tabIndex={0}
-            >
+            <div className="comparison-table-wrap" role="region" aria-label="Configuration differences" tabIndex={0}>
               <table
                 className="comparison-table"
                 aria-label="Setting comparison between configuration A and configuration B"
@@ -682,11 +1099,15 @@ resolver = "2"</code></pre>
             <div className="comparison-commands">
               <div>
                 <h4>Configuration A command</h4>
-                <pre className="comparison-command"><code>{generated}</code></pre>
+                <pre className="comparison-command">
+                  <code>{highlightCommand(generated)}</code>
+                </pre>
               </div>
               <div>
                 <h4>Configuration B command</h4>
-                <pre className="comparison-command"><code>{configBCommand}</code></pre>
+                <pre className="comparison-command">
+                  <code>{highlightCommand(configBCommand)}</code>
+                </pre>
               </div>
             </div>
           </section>
@@ -711,9 +1132,16 @@ resolver = "2"</code></pre>
             <div id="coverage-guide-panel" className="guide-panel">
               <ol>
                 <li>Start with the local project path so the tool can read the crate and tests in context.</li>
-                <li>Choose HTML output when you want a visual report and open it immediately after generation.</li>
-                <li>Read branch and line coverage together: low execution density usually explains weak confidence more than raw percentages.</li>
-                <li>Use the report to prioritize untested edge cases before shipping a contract update.</li>
+                <li>
+                  Choose HTML output when you want a visual report and open it immediately after generation.
+                </li>
+                <li>
+                  Read branch and line coverage together: low execution density usually explains weak confidence
+                  more than raw percentages.
+                </li>
+                <li>
+                  Use the report to prioritize untested edge cases before shipping a contract update.
+                </li>
               </ol>
             </div>
           )}
@@ -736,16 +1164,26 @@ resolver = "2"</code></pre>
             <div id="audit-guide-panel" className="guide-panel">
               <ol>
                 <li>Point the audit at the contract source directory or workspace root most relevant to the change.</li>
-                <li>Review auth and storage access warnings first; they often explain failure modes and privilege issues.</li>
-                <li>Use the strict mode toggle when you want warning-level findings to block release readiness.</li>
-                <li>Pair each finding with a focused regression test before finalizing the deployment checklist.</li>
+                <li>
+                  Review auth and storage access warnings first; they often explain failure modes and privilege
+                  issues.
+                </li>
+                <li>
+                  Use the strict mode toggle when you want warning-level findings to block release readiness.
+                </li>
+                <li>
+                  Pair each finding with a focused regression test before finalizing the deployment checklist.
+                </li>
               </ol>
             </div>
           )}
         </article>
       </section>
 
-      <footer><span>Built for the Stellar developer ecosystem.</span><span>Apache-2.0</span></footer>
+      <footer>
+        <span>Built for the Stellar developer ecosystem.</span>
+        <span>Apache-2.0</span>
+      </footer>
     </main>
   );
 }

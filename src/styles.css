@@ -456,3 +456,21 @@ footer { display: flex; justify-content: space-between; padding: 34px var(--page
   .terminal pre { padding: 22px; font-size: .7rem; }
   footer { gap: 20px; }
 }
+/* Syntax highlighting for command preview (Issue #134) */
+.syntax-command {
+  color: var(--syntax-command, #0066cc);
+  font-weight: 600;
+}
+
+.syntax-flag {
+  color: var(--syntax-flag, #d73a49);
+  font-weight: 500;
+}
+
+.syntax-value {
+  color: var(--syntax-value, #005a32);
+}
+
+.syntax-path {
+  color: var(--syntax-path, #6f42c1);
+}
