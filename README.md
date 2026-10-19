@@ -4,27 +4,64 @@ A visual companion to [Soroban Testkit](https://github.com/soroban-testkit/testk
 
 The interface does not execute contracts in the browser. Generated commands run locally through `soroban-testkit`, keeping contract tests deterministic and offline as required by the core project.
 
+## Supported Rust and Soroban prerequisites
+
+The interface targets the current supported ecosystem for local Soroban development and contract validation:
+
+- Rust >= 1.84 with the `wasm32v1-none` target installed.
+- `soroban-sdk` 27.0.x for current contract builds and tests.
+- `stellar-cli` >= 22.0.0 for local contract inspection and deployment workflows.
+- Cargo workspace layout with explicit workspace members and a stable resolver.
+
+## Workflow tutorials
+
+### 1) Complete coverage workflow
+
+Use the coverage workflow from the project root, then export an HTML or LCOV report for review:
+
+```sh
+cargo llvm-cov --workspace --all-features --html
+cargo llvm-cov --workspace --lcov --output-path lcov.info
+```
+
+This is the recommended local path for contract coverage before shipping a Soroban change.
+
+### 2) Cargo workspace layout example
+
+A simple workspace keeps shared dependencies and contract crates organized:
+
+```toml
+[workspace]
+members = [
+  "contracts/asset",
+  "contracts/escrow",
+  "contracts/auction",
+]
+resolver = "2"
+```
+
+This keeps each contract module isolated while making the root workspace easy to test, cover, and audit.
+
+### 3) Resource limits workflow
+
+When validating a contract's practical ceiling, compile the WASM artifact and sweep the target function with the limit ramp:
+
+```sh
+soroban-testkit limits \
+  --contract target/wasm32v1-none/release/contract.wasm \
+  --fn batch_payout \
+  --ramp recipients
+```
+
+This workflow is useful for exploring the exact resource ceiling of auth-heavy or high-volume entrypoints.
+
 ## Features
 
 - **Design System & Theme Tokens**: Comprehensive CSS custom property scale (`:root`) standardizing color schemes (canvas, surfaces, accent, text hierarchy, borders) and spacing increments.
 - **Module Filter & Empty State**: Search and filter testing modules by name or description with real-time feedback and an accessible empty-state layout with quick filter reset.
 - **Responsive & Reduced-Width Navigation**: Accessible navigation layout supporting truncated and responsive labels without overflowing viewport on mobile or narrow screens.
 - **Required vs. Optional Setting Distinction**: Visual badges (`Required` / `Optional`) and `aria-required` attributes in the CLI workbench distinguishing mandatory parameters from optional configuration flags.
-- **First-Time Installation Workflow**: A six-step `#install` section covering the WASM target, the CLI, the coverage wrapper, the dev-dependency, verification, and a first command — each step with a keyboard-accessible copy button.
-- **Command Comparison View**: A disclosure panel (`aria-expanded` / `aria-controls`) that compares configuration A with a fully editable configuration B, marking every changed setting in a scrollable table and showing both generated commands.
-- **Effective Defaults Preview**: A pre-copy panel that lists the fallback values the CLI will substitute for empty fields (for example `batch_payout`, `recipients`, and `./src`) and flags them as `Default applied`.
-- **Command Summary Card**: A live `Command summary` region recapping the active workflow's effective settings, marking values that fall back to defaults.
-
-## First-time installation
-
-1. `rustup target add wasm32v1-none` — add the WASM target used by `limits`.
-2. `cargo install soroban-testkit-cli --locked` — install the CLI (from a workspace checkout: `cargo install --path crates/cli --locked`).
-3. `cargo install cargo-llvm-cov` — install the wrapper used by `coverage`.
-4. `cargo add --dev soroban-testkit` — add the testing crate to your contract.
-5. `soroban-testkit --help` — verify the binary resolves on your PATH.
-6. Build your first command in the [CLI workbench](#commands); the effective-defaults preview shows every value before you copy it.
-
-The landing page mirrors these steps in the **First-time setup** section.
+- **Soroban Workflow Guide**: Accessible tutorial tabs for coverage, Cargo workspace layouts, and resource limit validation.
 
 ## Development
 

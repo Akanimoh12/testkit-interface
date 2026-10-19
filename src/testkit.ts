@@ -10,6 +10,82 @@ export interface CommandOptions {
   strict: boolean;
 }
 
+// Issue #142: Flag explanations
+export const flagExplanations: Record<string, string> = {
+  // coverage flags
+  "coverage.path": "Path to your contract project directory (default: current directory)",
+  "coverage.format": "Output format: html (interactive report), lcov (machine-readable), or text (terminal summary)",
+  "coverage.open": "Automatically open the HTML coverage report in your default browser",
+
+  // limits flags
+  "limits.path": "Path to compiled contract WASM artifact (default: target/wasm32v1-none/release/contract.wasm)",
+  "limits.fn": "Function name to probe for resource limits (default: batch_payout)",
+  "limits.ramp": "Parameter to ramp up (default: recipients)",
+
+  // audit flags
+  "audit.path": "Path to contract source code directory (default: ./src)",
+  "audit.strict": "Enable strict mode for stricter security checks",
+};
+
+// Issue #139: Presets for common project layouts
+export interface ConfigPreset {
+  name: string;
+  description: string;
+  options: Partial<CommandOptions>;
+}
+
+export const configPresets: ConfigPreset[] = [
+  {
+    name: "monorepo-contracts",
+    description: "Typical monorepo structure with /contracts subdirectory",
+    options: {
+      path: "./contracts",
+      command: "coverage",
+      format: "html",
+      open: true,
+    },
+  },
+  {
+    name: "single-contract",
+    description: "Single contract in repository root",
+    options: {
+      path: ".",
+      command: "coverage",
+      format: "html",
+      open: true,
+    },
+  },
+  {
+    name: "workspace-contract",
+    description: "Rust workspace with contract as member",
+    options: {
+      path: "./contracts/my-contract",
+      command: "coverage",
+      format: "html",
+      open: true,
+    },
+  },
+  {
+    name: "audit-strict",
+    description: "Run security audit in strict mode",
+    options: {
+      command: "audit",
+      path: "./src",
+      strict: true,
+    },
+  },
+  {
+    name: "limits-custom-function",
+    description: "Test custom function limits with ramped parameter",
+    options: {
+      command: "limits",
+      path: "target/wasm32v1-none/release/contract.wasm",
+      fn: "transfer",
+      ramp: "amount",
+    },
+  },
+];
+
 export const modules = [
   ["core", "Deterministic environments and addresses"],
   ["ledger", "Time, sequence, and clock control"],
@@ -116,185 +192,124 @@ export function formatCommandLine(
   return ["soroban-testkit audit \\", `  ${auditPath}`].join("\n");
 }
 
-export interface EffectiveDefaultRow {
-  key: "path" | "fn" | "ramp";
-  label: string;
-  input: string;
-  value: string;
-  applied: boolean;
+// Issue #140: Export configuration as JSON
+export interface ConfigurationExport {
+  version: string;
+  exportedAt: string;
+  options: CommandOptions;
+  command: string;
 }
 
-/**
- * Lists the fields of the active workflow whose empty input falls back to a
- * default, with the value the generated command will actually use.
- */
-export function effectiveDefaults(options: CommandOptions): EffectiveDefaultRow[] {
-  if (options.command === "limits") {
-    return [
-      {
-        key: "path",
-        label: "Contract artifact",
-        input: options.path,
-        value: options.path || fallbackValues.limitsContract,
-        applied: options.path === "",
-      },
-      {
-        key: "fn",
-        label: "Function",
-        input: options.fn,
-        value: options.fn || fallbackValues.limitsFunction,
-        applied: options.fn === "",
-      },
-      {
-        key: "ramp",
-        label: "Ramp parameter",
-        input: options.ramp,
-        value: options.ramp || fallbackValues.limitsRamp,
-        applied: options.ramp === "",
-      },
-    ];
+export function exportConfigAsJson(options: CommandOptions): string {
+  const config: ConfigurationExport = {
+    version: "1.0",
+    exportedAt: new Date().toISOString(),
+    options,
+    command: buildCommand(options),
+  };
+  return JSON.stringify(config, null, 2);
+}
+
+// Issue #138: Import configuration with validation
+export interface ValidationResult {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+export function validateConfiguration(data: unknown): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  if (!data || typeof data !== "object") {
+    errors.push("Configuration must be a valid JSON object");
+    return { valid: false, errors, warnings };
   }
 
-  if (options.command === "audit") {
-    return [
-      {
-        key: "path",
-        label: "Project path",
-        input: options.path,
-        value: options.path || fallbackValues.auditPath,
-        applied: options.path === "",
-      },
-    ];
+  const config = data as Record<string, unknown>;
+
+  // Validate required fields
+  if (!config.options || typeof config.options !== "object") {
+    errors.push("Configuration must contain 'options' object");
+    return { valid: false, errors, warnings };
   }
 
-  return [];
-}
+  const options = config.options as Record<string, unknown>;
 
-export interface SettingSummaryRow {
-  label: string;
-  value: string;
-}
+  // Validate command
+  const validCommands = ["coverage", "limits", "audit"];
+  if (!options.command || !validCommands.includes(String(options.command))) {
+    errors.push(`command must be one of: ${validCommands.join(", ")}`);
+  }
 
-/**
- * Human-readable recap of the settings the active workflow will run with.
- * Falls back to the same defaults `buildCommand` applies, marked "(default)".
- */
-export function summarizeConfiguration(
-  options: CommandOptions,
-): SettingSummaryRow[] {
+  // Validate path
+  if (options.path && typeof options.path !== "string") {
+    errors.push("path must be a string");
+  }
+
+  // Validate format for coverage
   if (options.command === "coverage") {
-    return [
-      { label: "Project or contract path", value: options.path || "(omitted)" },
-      { label: "Report format", value: options.format },
-      { label: "Open report when complete", value: options.open ? "On" : "Off" },
-    ];
+    const validFormats = ["html", "lcov", "text"];
+    if (options.format && !validFormats.includes(String(options.format))) {
+      errors.push(`format must be one of: ${validFormats.join(", ")}`);
+    }
   }
 
-  if (options.command === "limits") {
-    return [
-      {
-        label: "Contract artifact",
-        value: options.path || `${fallbackValues.limitsContract} (default)`,
-      },
-      {
-        label: "Function",
-        value: options.fn || `${fallbackValues.limitsFunction} (default)`,
-      },
-      {
-        label: "Ramp parameter",
-        value: options.ramp || `${fallbackValues.limitsRamp} (default)`,
-      },
-    ];
+  // Validate boolean fields
+  if (options.open !== undefined && typeof options.open !== "boolean") {
+    errors.push("open must be a boolean");
+  }
+  if (options.strict !== undefined && typeof options.strict !== "boolean") {
+    errors.push("strict must be a boolean");
   }
 
-  return [
-    {
-      label: "Project path",
-      value: options.path || `${fallbackValues.auditPath} (default)`,
-    },
-    { label: "Fail on warnings", value: options.strict ? "On" : "Off" },
-  ];
+  // Validate string fields
+  if (options.fn && typeof options.fn !== "string") {
+    errors.push("fn must be a string");
+  }
+  if (options.ramp && typeof options.ramp !== "string") {
+    errors.push("ramp must be a string");
+  }
+
+  // Warnings for missing optional fields
+  if (!options.path) {
+    warnings.push("path is not set; default values will be used");
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    warnings,
+  };
 }
 
-export interface ComparisonRow {
-  key: string;
-  label: string;
-  a: string;
-  b: string;
-  changed: boolean;
-}
+export function importConfigFromJson(jsonString: string): {
+  options: CommandOptions | null;
+  validation: ValidationResult;
+} {
+  let data: unknown;
+  try {
+    data = JSON.parse(jsonString);
+  } catch (e) {
+    return {
+      options: null,
+      validation: {
+        valid: false,
+        errors: [`Invalid JSON: ${e instanceof Error ? e.message : String(e)}`],
+        warnings: [],
+      },
+    };
+  }
 
-/**
- * Compares two configurations setting by setting. Rows are included when the
- * setting applies to either side; sides that do not use the setting read
- * "n/a" and empty values read "(empty)".
- */
-export function compareConfigurations(
-  a: CommandOptions,
-  b: CommandOptions,
-): ComparisonRow[] {
-  const usesCoverage = a.command === "coverage" || b.command === "coverage";
-  const usesLimits = a.command === "limits" || b.command === "limits";
-  const usesAudit = a.command === "audit" || b.command === "audit";
+  const validation = validateConfiguration(data);
+  if (!validation.valid) {
+    return { options: null, validation };
+  }
 
-  const fields: Array<{
-    key: string;
-    label: string;
-    applicable: boolean;
-    value: (options: CommandOptions) => string;
-  }> = [
-    { key: "command", label: "Workflow", applicable: true, value: (o) => o.command },
-    {
-      key: "path",
-      label: "Project or contract path",
-      applicable: true,
-      value: (o) => o.path || "(empty)",
-    },
-    {
-      key: "format",
-      label: "Report format",
-      applicable: usesCoverage,
-      value: (o) => (o.command === "coverage" ? o.format : "n/a"),
-    },
-    {
-      key: "open",
-      label: "Open report when complete",
-      applicable: usesCoverage,
-      value: (o) => (o.command === "coverage" ? (o.open ? "On" : "Off") : "n/a"),
-    },
-    {
-      key: "fn",
-      label: "Function",
-      applicable: usesLimits,
-      value: (o) => (o.command === "limits" ? o.fn || "(empty)" : "n/a"),
-    },
-    {
-      key: "ramp",
-      label: "Ramp parameter",
-      applicable: usesLimits,
-      value: (o) => (o.command === "limits" ? o.ramp || "(empty)" : "n/a"),
-    },
-    {
-      key: "strict",
-      label: "Fail on warnings",
-      applicable: usesAudit,
-      value: (o) => (o.command === "audit" ? (o.strict ? "On" : "Off") : "n/a"),
-    },
-  ];
+  const config = data as Record<string, unknown>;
+  const options = config.options as CommandOptions;
 
-  return fields
-    .filter((field) => field.applicable)
-    .map((field) => {
-      const aValue = field.value(a);
-      const bValue = field.value(b);
-      return {
-        key: field.key,
-        label: field.label,
-        a: aValue,
-        b: bValue,
-        changed: aValue !== bValue,
-      };
-    });
+  return { options, validation };
 }
 
 export interface CliCompatibility {
@@ -453,4 +468,3 @@ export const localFileGuides: Record<CommandName, LocalFileGuide> = {
       "100% offline, read-only and non-destructive. Source code is parsed locally without external telemetry.",
   },
 };
-
