@@ -7,6 +7,7 @@ import {
   type OptionalArgKey,
 } from "./testkit";
 import { copyToClipboard } from "./clipboard";
+import { CORE_REPO_URL, INSTALL_GUIDE_URL, INTERFACE_REPO_URL } from "./links";
 import { useActiveSection } from "./useActiveSection";
 
 const navSections = [

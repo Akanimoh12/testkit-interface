@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { CORE_REPO_URL, INSTALL_GUIDE_URL, INTERFACE_REPO_URL } from "./links";
@@ -377,5 +377,24 @@ describe("Module card command builder links (#129, #130)", () => {
 
     expect(screen.getByRole("button", { name: "limits" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByTestId("command-output")).toHaveTextContent("soroban-testkit limits");
+  });
+});
+
+describe("Repository and installation links (#120, #121, #122)", () => {
+  it("links the interface, the install guide, and the core repository to their URLs", () => {
+    render(<App />);
+
+    expect(screen.getByRole("link", { name: /view this interface on github/i })).toHaveAttribute(
+      "href",
+      INTERFACE_REPO_URL,
+    );
+    expect(screen.getByRole("link", { name: /read the installation guide/i })).toHaveAttribute(
+      "href",
+      INSTALL_GUIDE_URL,
+    );
+    expect(screen.getByRole("link", { name: "Soroban Testkit core repository" })).toHaveAttribute(
+      "href",
+      CORE_REPO_URL,
+    );
   });
 });
