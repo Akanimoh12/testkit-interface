@@ -58,7 +58,8 @@ This workflow is useful for exploring the exact resource ceiling of auth-heavy o
 ## Features
 
 - **Design System & Theme Tokens**: Comprehensive CSS custom property scale (`:root`) standardizing color schemes (canvas, surfaces, accent, text hierarchy, borders) and spacing increments.
-- **Module Filter & Empty State**: Search and filter testing modules by name or description with real-time feedback and an accessible empty-state layout with quick filter reset.
+- **Module Filter & Empty State**: Search and filter testing modules by name or description with real-time feedback and an accessible empty-state layout with quick filter reset. The empty state names the search term, is announced via `role="status"`, and **Reset filter** returns keyboard focus to the search box.
+- **Repository & Installation Links**: The hero links prominently to this interface's repository, the install section ends with a dedicated *Full installation instructions* card linking to the core repository's installation guide, and the footer links to the core [Soroban Testkit repository](https://github.com/soroban-testkit/testkit-blockchain). All are plain, keyboard-focusable links with visible focus outlines.
 - **Responsive & Reduced-Width Navigation**: Accessible navigation layout supporting truncated and responsive labels without overflowing viewport on mobile or narrow screens.
 - **Required vs. Optional Setting Distinction**: Visual badges (`Required` / `Optional`) and `aria-required` attributes in the CLI workbench distinguishing mandatory parameters from optional configuration flags.
 - **Optional Argument Reordering**: Coverage and audit options can be reordered with keyboard-accessible up/down controls so advanced users can put the most important flags first.

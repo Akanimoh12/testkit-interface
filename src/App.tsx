@@ -7,6 +7,7 @@ import {
   type OptionalArgKey,
 } from "./testkit";
 import { copyToClipboard } from "./clipboard";
+import { CORE_REPO_URL, INSTALL_GUIDE_URL, INTERFACE_REPO_URL } from "./links";
 
 const descriptions: Record<CommandName, string> = {
   coverage: "Generate contract-test coverage through cargo-llvm-cov.",
@@ -201,6 +202,14 @@ export default function App() {
   const [copied, setCopied] = useState(false);
   const [copiedStep, setCopiedStep] = useState<number | null>(null);
   const [moduleFilter, setModuleFilter] = useState("");
+  const moduleSearchRef = useRef<HTMLInputElement>(null);
+
+  // Resetting from the empty state removes the button that had focus, so move
+  // focus back to the search box instead of dropping it to <body> (#123).
+  const resetModuleFilter = () => {
+    setModuleFilter("");
+    moduleSearchRef.current?.focus();
+  };
   const [coverageOrder, setCoverageOrder] = useState<OptionalArgKey[]>(defaultCoverageOrder);
   const [multilineEditor, setMultilineEditor] = useState(false);
   const [advancedCommand, setAdvancedCommand] = useState("");
@@ -407,7 +416,7 @@ export default function App() {
           <a href="#install">Install</a>
           <a href="#modules">Modules</a>
           <a href="#commands">Commands</a>
-          <a href="https://github.com/soroban-testkit/testkit-blockchain">GitHub ↗</a>
+          <a href={CORE_REPO_URL}>GitHub ↗</a>
         </div>
       </nav>
 
@@ -431,6 +440,12 @@ export default function App() {
               Explore modules
             </a>
           </div>
+          <p className="repo-callout">
+            <a className="repo-link" href={INTERFACE_REPO_URL}>
+              View this interface on GitHub <span aria-hidden="true">↗</span>
+            </a>
+            <span className="repo-callout-note">Open source — report issues or contribute to the interface.</span>
+          </p>
         </div>
         <div className="terminal" aria-label="Example Soroban test">
           <div className="terminal-top">
@@ -483,6 +498,16 @@ export default function App() {
             </li>
           ))}
         </ol>
+        <aside className="install-guide" aria-labelledby="install-guide-heading">
+          <h3 id="install-guide-heading">Full installation instructions</h3>
+          <p>
+            Need crates.io installs, workspace checkouts, or a clean-environment check? The core repository keeps the
+            complete, up-to-date installation guide.
+          </p>
+          <a className="button secondary" href={INSTALL_GUIDE_URL}>
+            Read the installation guide <span aria-hidden="true">↗</span>
+          </a>
+        </aside>
       </section>
 
       <section className="modules" id="modules">
@@ -495,6 +520,7 @@ export default function App() {
             </label>
             <input
               id="module-search"
+              ref={moduleSearchRef}
               type="search"
               className="module-filter-input"
               placeholder="Filter modules by name or description..."
@@ -532,11 +558,7 @@ export default function App() {
             </div>
             <h3>No modules match &ldquo;{moduleFilter}&rdquo;</h3>
             <p>No testing modules found matching your filter criteria. Try adjusting your search term.</p>
-            <button
-              type="button"
-              className="button secondary"
-              onClick={() => setModuleFilter("")}
-            >
+            <button type="button" className="button secondary" onClick={resetModuleFilter}>
               Reset filter
             </button>
           </div>
@@ -1182,6 +1204,9 @@ export default function App() {
 
       <footer>
         <span>Built for the Stellar developer ecosystem.</span>
+        <span className="footer-links">
+          <a href={CORE_REPO_URL}>Soroban Testkit core repository</a>
+        </span>
         <span>Apache-2.0</span>
       </footer>
     </main>
