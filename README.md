@@ -69,6 +69,35 @@ This workflow is useful for exploring the exact resource ceiling of auth-heavy o
 - **Active Section Navigation**: The top navigation marks the section in view (`aria-current="location"`) as you scroll, click, or tab through the links.
 - **Labelled Navigation Landmark**: The page navigation is exposed as a landmark named "Main navigation" so assistive technology users can jump to it.
 - **Module Command Links**: Each module card links to the command builder and to the CLI workflows most relevant to that module (for example, `money` links to `audit` and `limits`). Selecting a workflow link sets the builder to that workflow.
+- **Skip Link & Keyboard Focus**: A "Skip to main content" link is the first tab stop, and every control shows the same visible focus outline, including text inputs and selects (#109).
+- **Screen Reader Semantics**: The command selector is a labelled group of toggle buttons, the example snippet is a named region, copy results are announced politely, and each "Clear" button names its field (#108).
+- **200% Zoom & Reflow**: Nothing is clipped at high zoom. The workbench keeps every control on screen at 640px and 320px widths, which cover 200% zoom and WCAG 1.4.10 reflow on a 1280px layout (#110).
+- **Focus Return Rule**: The `useFocusReturn` hook returns focus to the trigger when a dialog closes, with a defined fallback if the trigger is gone (#111). See [Focus return for dialogs](#focus-return-for-dialogs).
+
+## Accessibility
+
+The accessibility review, automated checks, and findings are in [docs/accessibility.md](docs/accessibility.md). Browser checks for keyboard use, screen reader structure, zoom, and focus return live in `tests/visual/accessibility.spec.ts`. Run them with `npx playwright test tests/visual/accessibility.spec.ts`. When nothing is listening on port 4173, Playwright starts the app with `npm run build && npm run dev`, so the build runs first. Start `npm run dev -- --port 4173` yourself to skip it.
+
+### Focus return for dialogs
+
+Any component that opens a dialog or similar surface can apply the rule:
+
+```tsx
+import { useFocusReturn } from "./focusReturn";
+
+function ResetDialog() {
+  const [open, setOpen] = useState(false);
+  // A stable element that stays rendered while the dialog is open.
+  const fallbackRef = useRef<HTMLButtonElement>(null);
+  useFocusReturn(open, fallbackRef);
+  // ...
+}
+```
+
+- The trigger is whichever element had focus when `open` became `true`. You do not pass it in.
+- Close the surface by setting `open` to `false`. Confirm, cancel, Escape, and unmounting while open all restore focus the same way.
+- Move focus into the dialog from a `useEffect`, not with `autoFocus`. `autoFocus` runs before the hook records the trigger, so focus would return to the wrong place.
+- Choose a fallback that remains rendered while the dialog is open, such as the section heading or the opener's container. If the trigger is removed or disabled, focus moves there instead of being lost to `<body>`.
 
 ## Development
 
