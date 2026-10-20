@@ -7,6 +7,26 @@ import {
   type OptionalArgKey,
 } from "./testkit";
 import { copyToClipboard } from "./clipboard";
+import { useActiveSection } from "./useActiveSection";
+
+const navSections = [
+  { id: "install", label: "Install" },
+  { id: "modules", label: "Modules" },
+  { id: "commands", label: "Commands" },
+] as const;
+const navSectionIds = navSections.map((section) => section.id);
+
+// Which CLI workflows are most useful for each module (#130). Keyed by module
+// name so adding a module without a mapping fails type-checking.
+const moduleRelatedWorkflows: Record<(typeof modules)[number][0], CommandName[]> = {
+  core: ["coverage"],
+  ledger: ["audit"],
+  money: ["audit", "limits"],
+  events: ["coverage"],
+  tokens: ["limits"],
+  auth: ["audit"],
+  ttl: ["audit"],
+};
 
 const descriptions: Record<CommandName, string> = {
   coverage: "Generate contract-test coverage through cargo-llvm-cov.",
@@ -210,6 +230,7 @@ export default function App() {
   const [coverageGuideOpen, setCoverageGuideOpen] = useState(false);
   const [auditGuideOpen, setAuditGuideOpen] = useState(false);
   const comparePanelRef = useRef<HTMLDivElement>(null);
+  const [activeSection, setActiveSection] = useActiveSection(navSectionIds);
 
   useEffect(() => {
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
@@ -398,15 +419,23 @@ export default function App() {
 
   return (
     <main>
-      <nav>
+      <nav aria-label="Main navigation">
         <a className="brand" href="#top" aria-label="Soroban Testkit home">
           <span className="brand-mark">S</span>
           <span>Soroban Testkit</span>
         </a>
-        <div className="nav-links" aria-label="Main navigation">
-          <a href="#install">Install</a>
-          <a href="#modules">Modules</a>
-          <a href="#commands">Commands</a>
+        <div className="nav-links">
+          {navSections.map((section) => (
+            <a
+              key={section.id}
+              href={`#${section.id}`}
+              aria-current={activeSection === section.id ? "location" : undefined}
+              onClick={() => setActiveSection(section.id)}
+              onFocus={() => setActiveSection(section.id)}
+            >
+              {section.label}
+            </a>
+          ))}
           <a href="https://github.com/soroban-testkit/testkit-blockchain">GitHub ↗</a>
         </div>
       </nav>
@@ -522,6 +551,21 @@ export default function App() {
                 <span>0{index + 1}</span>
                 <h3>{name}</h3>
                 <p>{description}</p>
+                <div className="module-card-links">
+                  <a href="#commands" aria-label={`Open the command builder from the ${name} module`}>
+                    Command builder
+                  </a>
+                  {moduleRelatedWorkflows[name].map((workflow) => (
+                    <a
+                      key={workflow}
+                      href="#commands"
+                      aria-label={`Open the ${workflow} workflow related to ${name}`}
+                      onClick={() => setCommand(workflow)}
+                    >
+                      {workflow}
+                    </a>
+                  ))}
+                </div>
               </article>
             ))}
           </div>

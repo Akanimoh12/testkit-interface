@@ -65,6 +65,9 @@ This workflow is useful for exploring the exact resource ceiling of auth-heavy o
 - **Safe Reset Confirmation**: Resetting the command builder asks for explicit confirmation before restoring defaults, preventing accidental form resets.
 - **Contextual Input Guidance**: Function and ramp fields include inline help text explaining what each value should look like in real contract workflows.
 - **Multiline Advanced Editor**: A dedicated multiline editor lets power users review or paste full command snippets and apply them back into the workbench.
+- **Active Section Navigation**: The top navigation marks the section in view (`aria-current="location"`) as you scroll, click, or tab through the links.
+- **Labelled Navigation Landmark**: The page navigation is exposed as a landmark named "Main navigation" so assistive technology users can jump to it.
+- **Module Command Links**: Each module card links to the command builder and to the CLI workflows most relevant to that module (for example, `money` links to `audit` and `limits`). Selecting a workflow link sets the builder to that workflow.
 
 ## Development
 

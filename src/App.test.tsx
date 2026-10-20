@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 
 describe("App command copy", () => {
@@ -260,5 +260,103 @@ describe("Command builder enhancements", () => {
     expect(screen.getByTestId("command-output")).toHaveTextContent(
       "soroban-testkit audit ./src --strict",
     );
+  });
+});
+
+describe("Active section tracking in navigation (#128)", () => {
+  class IntersectionObserverMock {
+    static instances: IntersectionObserverMock[] = [];
+    constructor(public callback: IntersectionObserverCallback) {
+      IntersectionObserverMock.instances.push(this);
+    }
+    observe = vi.fn();
+    unobserve = vi.fn();
+    disconnect = vi.fn();
+    takeRecords = vi.fn(() => []);
+  }
+
+  const emit = (id: string, isIntersecting: boolean) => {
+    const observer = IntersectionObserverMock.instances[0];
+    act(() => {
+      observer.callback(
+        [{ isIntersecting, target: document.getElementById(id) } as unknown as IntersectionObserverEntry],
+        observer as unknown as IntersectionObserver,
+      );
+    });
+  };
+
+  beforeEach(() => {
+    IntersectionObserverMock.instances = [];
+    vi.stubGlobal("IntersectionObserver", IntersectionObserverMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("marks the navigation link for the section currently in view", () => {
+    render(<App />);
+
+    emit("modules", true);
+
+    expect(screen.getByRole("link", { name: "Modules" })).toHaveAttribute("aria-current", "location");
+    expect(screen.getByRole("link", { name: "Install" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("clears the highlight when the active section leaves the viewport", () => {
+    render(<App />);
+
+    emit("modules", true);
+    emit("modules", false);
+
+    expect(screen.getByRole("link", { name: "Modules" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("highlights a link immediately on pointer click", () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("link", { name: "Commands" }));
+
+    expect(screen.getByRole("link", { name: "Commands" })).toHaveAttribute("aria-current", "location");
+  });
+
+  it("highlights a link when it receives keyboard focus", () => {
+    render(<App />);
+
+    fireEvent.focus(screen.getByRole("link", { name: "Install" }));
+
+    expect(screen.getByRole("link", { name: "Install" })).toHaveAttribute("aria-current", "location");
+  });
+});
+
+describe("Navigation landmark label (#131)", () => {
+  it("labels the page navigation landmark", () => {
+    render(<App />);
+
+    expect(screen.getByRole("navigation", { name: "Main navigation" })).toBeInTheDocument();
+  });
+});
+
+describe("Module card command builder links (#129, #130)", () => {
+  it("gives every module card an anchor to the command builder", () => {
+    render(<App />);
+
+    const anchors = screen.getAllByRole("link", { name: /open the command builder from the/i });
+    expect(anchors).toHaveLength(7);
+    anchors.forEach((anchor) => expect(anchor).toHaveAttribute("href", "#commands"));
+  });
+
+  it("links each module to its related workflows and selects that workflow", () => {
+    render(<App />);
+
+    const moneyAudit = screen.getByRole("link", { name: "Open the audit workflow related to money" });
+    const moneyLimits = screen.getByRole("link", { name: "Open the limits workflow related to money" });
+    expect(moneyAudit).toHaveAttribute("href", "#commands");
+    expect(moneyLimits).toHaveAttribute("href", "#commands");
+
+    fireEvent.click(moneyLimits);
+
+    expect(screen.getByRole("button", { name: "limits" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("command-output")).toHaveTextContent("soroban-testkit limits");
   });
 });
