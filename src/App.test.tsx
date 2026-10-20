@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { CORE_REPO_URL, INSTALL_GUIDE_URL, INTERFACE_REPO_URL } from "./links";
 
 describe("App command copy", () => {
   const originalClipboard = navigator.clipboard;
@@ -121,6 +122,24 @@ describe("Module filter and empty-state layout (#188)", () => {
     fireEvent.click(clearButton);
 
     expect(screen.getByText("ttl")).toBeInTheDocument();
+  });
+
+  it("explains the empty state and returns focus to the search box on reset (#123)", () => {
+    render(<App />);
+    const filterInput = screen.getByLabelText("Filter modules");
+    fireEvent.change(filterInput, { target: { value: "zzz" } });
+
+    expect(screen.getByRole("heading", { name: /No modules match .zzz./ })).toBeInTheDocument();
+    expect(document.getElementById("module-grid")).toBeNull();
+
+    const resetButton = screen.getByRole("button", { name: "Reset filter" });
+    resetButton.focus();
+    fireEvent.click(resetButton);
+
+    expect(filterInput).toHaveValue("");
+    expect(filterInput).toHaveFocus();
+    const grid = document.getElementById("module-grid") as HTMLElement;
+    expect(within(grid).getAllByRole("article")).toHaveLength(7);
   });
 });
 
