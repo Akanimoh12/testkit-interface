@@ -495,9 +495,9 @@ export default function App() {
         </div>
         <div className="terminal" role="region" aria-label="Example Soroban test">
           <div className="terminal-top">
-            <i />
-            <i />
-            <i />
+            <i aria-hidden="true" />
+            <i aria-hidden="true" />
+            <i aria-hidden="true" />
             <span>escrow_test.rs</span>
           </div>
           <pre>
@@ -510,11 +510,11 @@ export default function App() {
               token.assert_balance(&buyer, <b>100</b>);
             </code>
           </pre>
-          <div className="pass">✓ test result: ok</div>
+          <div className="pass" aria-label="test result: ok">✓ test result: ok</div>
         </div>
       </section>
 
-      <section className="install" id="install" aria-labelledby="install-heading">
+      <section className="install" id="install" aria-labelledby="install-heading" tabIndex={-1}>
         <header>
           <p className="eyebrow">First-time setup</p>
           <h2 id="install-heading">From a clean machine to your first command.</h2>
@@ -556,7 +556,7 @@ export default function App() {
         </aside>
       </section>
 
-      <section className="modules" id="modules">
+      <section className="modules" id="modules" tabIndex={-1}>
         <header>
           <p className="eyebrow">One prelude. Seven focused modules.</p>
           <h2>Everything a serious contract test needs.</h2>
@@ -732,7 +732,7 @@ export default function App() {
         ))}
       </section>
 
-      <section className="commands" id="commands">
+      <section className="commands" id="commands" tabIndex={-1}>
         <div className="command-copy">
           <p className="eyebrow">CLI workbench</p>
           <h2>From intent to command.</h2>

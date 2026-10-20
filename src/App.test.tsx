@@ -481,3 +481,43 @@ describe("Screen reader semantics (#108)", () => {
     expect(await screen.findByText("Step 2 command copied to clipboard")).toBeInTheDocument();
   });
 });
+
+describe("Navigation enhancements (#112, #113, #114, #115)", () => {
+  it("marks decorative terminal dots with aria-hidden", () => {
+    render(<App />);
+    const terminal = screen.getByRole("region", { name: "Example Soroban test" });
+    const decorativeDots = terminal.querySelectorAll("i[aria-hidden='true']");
+    expect(decorativeDots).toHaveLength(3);
+  });
+
+  it("provides accessible label for terminal test result", () => {
+    render(<App />);
+    const passLabel = screen.getByLabelText("test result: ok");
+    expect(passLabel).toBeInTheDocument();
+    expect(passLabel).toHaveTextContent("✓ test result: ok");
+  });
+
+  it("makes section headings focusable with tabIndex=-1 for skip link targets", () => {
+    render(<App />);
+    expect(document.getElementById("install")).toHaveAttribute("tabindex", "-1");
+    expect(document.getElementById("modules")).toHaveAttribute("tabindex", "-1");
+    expect(document.getElementById("commands")).toHaveAttribute("tabindex", "-1");
+  });
+
+  it("highlights the current section in the navigation", async () => {
+    render(<App />);
+    const navLinks = screen.getAllByRole("link", { name: /^(Install|Modules|Commands)$/ });
+
+    const installLink = navLinks.find(link => link.textContent === "Install");
+    expect(installLink).not.toHaveAttribute("aria-current");
+
+    fireEvent.click(installLink!);
+    expect(installLink).toHaveAttribute("aria-current", "location");
+  });
+
+  it("preserves scroll padding for sticky navigation when navigating with anchors", () => {
+    render(<App />);
+    const html = document.documentElement;
+    expect(html).toHaveStyle("scroll-padding-top: 78px");
+  });
+});
