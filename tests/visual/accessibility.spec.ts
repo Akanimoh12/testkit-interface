@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 test.describe("keyboard-only navigation (#109)", () => {
   test("skip link moves keyboard focus past the navigation to the page content", async ({ page }) => {
@@ -94,4 +94,69 @@ test.describe("screen reader structure (#108)", () => {
 
     await expect(page.locator('[aria-live="polite"]').filter({ hasText: "Command copied to clipboard" })).toHaveCount(1);
   });
+});
+
+// 200% zoom on a 1280px layout is 640 CSS px. WCAG 1.4.10 reflow is 320 CSS px
+// (400% zoom on 1280px). Both must keep every control on screen.
+const zoomWidths = [
+  { name: "200% zoom (640px)", width: 640 },
+  { name: "320px reflow (WCAG 1.4.10)", width: 320 },
+];
+
+const workbenchStates: { name: string; open: (page: Page) => Promise<void> }[] = [
+  { name: "default coverage builder", open: async () => {} },
+  {
+    name: "limits workflow",
+    open: async (page) => page.getByRole("button", { name: "limits" }).click(),
+  },
+  {
+    name: "audit workflow",
+    open: async (page) => page.getByRole("button", { name: "audit" }).click(),
+  },
+  {
+    name: "advanced editor open",
+    open: async (page) => page.getByRole("button", { name: "Advanced arguments" }).click(),
+  },
+  {
+    name: "comparison panel open",
+    open: async (page) => page.getByRole("button", { name: "Compare two configurations" }).click(),
+  },
+  {
+    name: "workflow guides expanded",
+    open: async (page) => {
+      await page.getByRole("button", { name: "Show guide" }).click();
+      await page.getByRole("button", { name: "Show tutorial" }).click();
+    },
+  },
+];
+
+test.describe("200% zoom and reflow (#110)", () => {
+  for (const viewport of zoomWidths) {
+    for (const state of workbenchStates) {
+      test(`${state.name} keeps controls on screen at ${viewport.name}`, async ({ page }) => {
+        await page.setViewportSize({ width: viewport.width, height: 900 });
+        await page.goto("/");
+        await state.open(page);
+
+        const report = await page.evaluate((vw) => {
+          const offenders: string[] = [];
+          document.querySelectorAll<HTMLElement>("main a[href], main button, main input, main select, main textarea").forEach((element) => {
+            const rect = element.getBoundingClientRect();
+            if (rect.width === 0 && rect.height === 0) return;
+            if (rect.right > vw + 0.5 || rect.left < -0.5) {
+              offenders.push(`${element.tagName.toLowerCase()} "${(element.getAttribute("aria-label") || element.textContent || "").trim().slice(0, 40)}"`);
+            }
+          });
+          return {
+            scrollWidth: document.documentElement.scrollWidth,
+            clientWidth: document.documentElement.clientWidth,
+            offenders,
+          };
+        }, viewport.width);
+
+        expect(report.scrollWidth, "page must not scroll horizontally").toBeLessThanOrEqual(report.clientWidth);
+        expect(report.offenders, "controls must not be clipped off-screen").toEqual([]);
+      });
+    }
+  }
 });
