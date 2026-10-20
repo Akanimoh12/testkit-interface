@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { CORE_REPO_URL, INSTALL_GUIDE_URL, INTERFACE_REPO_URL } from "./links";
@@ -166,7 +166,7 @@ describe("Reduced-width layout for navigation labels (#189)", () => {
 describe("Visual distinction between required and optional settings (#196)", () => {
   it("displays Required badge and aria-required on required path input", () => {
     render(<App />);
-    const pathInput = screen.getByLabelText(/project or contract path/i);
+    const pathInput = screen.getByLabelText("Project or contract path");
     expect(pathInput).toHaveAttribute("aria-required", "true");
     expect(screen.getAllByText("Required").length).toBeGreaterThanOrEqual(1);
   });
@@ -182,8 +182,8 @@ describe("Visual distinction between required and optional settings (#196)", () 
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: "limits" }));
 
-    const fnInput = screen.getByLabelText(/function/i);
-    const rampInput = screen.getByLabelText(/ramp parameter/i);
+    const fnInput = screen.getByLabelText("Function");
+    const rampInput = screen.getByLabelText("Ramp parameter");
 
     expect(fnInput).toHaveAttribute("aria-required", "true");
     expect(rampInput).toHaveAttribute("aria-required", "true");
@@ -377,5 +377,107 @@ describe("Module card command builder links (#129, #130)", () => {
 
     expect(screen.getByRole("button", { name: "limits" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByTestId("command-output")).toHaveTextContent("soroban-testkit limits");
+  });
+});
+
+describe("Repository and installation links (#120, #121, #122)", () => {
+  it("links the interface, the install guide, and the core repository to their URLs", () => {
+    render(<App />);
+
+    expect(screen.getByRole("link", { name: /view this interface on github/i })).toHaveAttribute(
+      "href",
+      INTERFACE_REPO_URL,
+    );
+    expect(screen.getByRole("link", { name: /read the installation guide/i })).toHaveAttribute(
+      "href",
+      INSTALL_GUIDE_URL,
+    );
+    expect(screen.getByRole("link", { name: "Soroban Testkit core repository" })).toHaveAttribute(
+      "href",
+      CORE_REPO_URL,
+    );
+  });
+});
+
+describe("Keyboard-only navigation (#109)", () => {
+  it("offers a skip link as the first focusable element that targets the page content", () => {
+    render(<App />);
+
+    const skipLink = screen.getByRole("link", { name: "Skip to main content" });
+    expect(skipLink).toHaveAttribute("href", "#top");
+    expect(document.querySelector("main")?.firstElementChild).toBe(skipLink);
+    expect(document.getElementById("top")).toHaveAttribute("tabindex", "-1");
+  });
+
+  it("moves between workflow tabs with the arrow, Home, and End keys", () => {
+    render(<App />);
+    const coverageTab = screen.getByRole("tab", { name: /coverage workflow/i });
+    const workspaceTab = screen.getByRole("tab", { name: /cargo workspace/i });
+    const limitsTab = screen.getByRole("tab", { name: /resource limits/i });
+
+    coverageTab.focus();
+    fireEvent.keyDown(coverageTab, { key: "ArrowRight" });
+    expect(workspaceTab).toHaveAttribute("aria-selected", "true");
+    expect(workspaceTab).toHaveFocus();
+
+    fireEvent.keyDown(workspaceTab, { key: "End" });
+    expect(limitsTab).toHaveAttribute("aria-selected", "true");
+    expect(limitsTab).toHaveFocus();
+
+    fireEvent.keyDown(limitsTab, { key: "ArrowRight" });
+    expect(coverageTab).toHaveAttribute("aria-selected", "true");
+    expect(coverageTab).toHaveFocus();
+
+    fireEvent.keyDown(coverageTab, { key: "ArrowLeft" });
+    expect(limitsTab).toHaveAttribute("aria-selected", "true");
+
+    fireEvent.keyDown(limitsTab, { key: "Home" });
+    expect(coverageTab).toHaveAttribute("aria-selected", "true");
+  });
+});
+
+describe("Screen reader semantics (#108)", () => {
+  it("exposes the command selector as a group of toggle buttons rather than a tablist", () => {
+    render(<App />);
+
+    expect(screen.queryByRole("tablist", { name: "Command workflow selector" })).not.toBeInTheDocument();
+    const group = screen.getByRole("group", { name: "Command workflow selector" });
+    expect(within(group).getByRole("button", { name: "coverage" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("names the example terminal as a region so its code is announced with a label", () => {
+    render(<App />);
+
+    expect(screen.getByRole("region", { name: "Example Soroban test" })).toBeInTheDocument();
+  });
+
+  it("gives each clear button a field-specific name", () => {
+    render(<App />);
+    expect(screen.getByRole("button", { name: "Clear project or contract path" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "limits" }));
+    expect(screen.getByRole("button", { name: "Clear function" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Clear ramp parameter" })).toBeInTheDocument();
+  });
+
+  it("announces a successful command copy through a polite live region", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy", exact: true }));
+
+    const announcement = await screen.findByText("Command copied to clipboard");
+    expect(announcement).toHaveAttribute("aria-live", "polite");
+  });
+
+  it("announces which install step was copied", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy step 2 command" }));
+
+    expect(await screen.findByText("Step 2 command copied to clipboard")).toBeInTheDocument();
   });
 });

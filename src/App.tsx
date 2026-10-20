@@ -7,6 +7,7 @@ import {
   type OptionalArgKey,
 } from "./testkit";
 import { copyToClipboard } from "./clipboard";
+import { CORE_REPO_URL, INSTALL_GUIDE_URL, INTERFACE_REPO_URL } from "./links";
 import { useActiveSection } from "./useActiveSection";
 
 const navSections = [
@@ -220,6 +221,9 @@ export default function App() {
   const [shell, setShell] = useState<"bash" | "zsh" | "fish" | "sh">("bash");
   const [copied, setCopied] = useState(false);
   const [copiedStep, setCopiedStep] = useState<number | null>(null);
+  // Copy buttons change their label, which screen readers often skip; this
+  // polite live region announces the result explicitly (#108).
+  const [announcement, setAnnouncement] = useState("");
   const [moduleFilter, setModuleFilter] = useState("");
   const moduleSearchRef = useRef<HTMLInputElement>(null);
 
@@ -379,13 +383,21 @@ export default function App() {
   const copy = async () => {
     await copyToClipboard(generated);
     setCopied(true);
-    window.setTimeout(() => setCopied(false), 1600);
+    setAnnouncement("Command copied to clipboard");
+    window.setTimeout(() => {
+      setCopied(false);
+      setAnnouncement("");
+    }, 1600);
   };
 
   const copyStep = async (index: number, stepCommand: string) => {
     await copyToClipboard(stepCommand);
     setCopiedStep(index);
-    window.setTimeout(() => setCopiedStep(null), 1600);
+    setAnnouncement(`Step ${index + 1} command copied to clipboard`);
+    window.setTimeout(() => {
+      setCopiedStep(null);
+      setAnnouncement("");
+    }, 1600);
   };
 
   const toggleComparison = () => {
@@ -427,6 +439,12 @@ export default function App() {
 
   return (
     <main>
+      <a className="skip-link" href="#top">
+        Skip to main content
+      </a>
+      <p className="sr-only" aria-live="polite">
+        {announcement}
+      </p>
       <nav aria-label="Main navigation">
         <a className="brand" href="#top" aria-label="Soroban Testkit home">
           <span className="brand-mark">S</span>
@@ -448,7 +466,7 @@ export default function App() {
         </div>
       </nav>
 
-      <section className="hero" id="top">
+      <section className="hero" id="top" tabIndex={-1}>
         <div>
           <p className="eyebrow">Contract testing, without the repeated scaffolding</p>
           <h1>
@@ -475,7 +493,7 @@ export default function App() {
             <span className="repo-callout-note">Open source — report issues or contribute to the interface.</span>
           </p>
         </div>
-        <div className="terminal" aria-label="Example Soroban test">
+        <div className="terminal" role="region" aria-label="Example Soroban test">
           <div className="terminal-top">
             <i />
             <i />
@@ -573,7 +591,7 @@ export default function App() {
           <div className="module-grid" id="module-grid">
             {filteredModules.map(([name, description], index) => (
               <article key={name}>
-                <span>0{index + 1}</span>
+                <span aria-hidden="true">0{index + 1}</span>
                 <h3>{name}</h3>
                 <p>{description}</p>
                 <div className="module-card-links">
@@ -719,7 +737,7 @@ export default function App() {
           <p className="eyebrow">CLI workbench</p>
           <h2>From intent to command.</h2>
           <p>Configure a supported Testkit workflow and copy the exact command to your terminal.</p>
-          <div className="command-tabs" role="tablist" aria-label="Command workflow selector">
+          <div className="command-tabs" role="group" aria-label="Command workflow selector">
             {(["coverage", "limits", "audit"] as const).map((name) => (
               <button
                 key={name}
@@ -783,7 +801,7 @@ export default function App() {
                   type="button"
                   className="clear-field-button"
                   onClick={() => setPath("")}
-                  aria-label="Clear"
+                  aria-label="Clear project or contract path"
                 >
                   Clear
                 </button>
@@ -873,7 +891,7 @@ export default function App() {
                       type="button"
                       className="clear-field-button"
                       onClick={() => setFn("")}
-                      aria-label="Clear"
+                      aria-label="Clear function"
                     >
                       Clear
                     </button>
@@ -902,7 +920,7 @@ export default function App() {
                       type="button"
                       className="clear-field-button"
                       onClick={() => setRamp("")}
-                      aria-label="Clear"
+                      aria-label="Clear ramp parameter"
                     >
                       Clear
                     </button>
