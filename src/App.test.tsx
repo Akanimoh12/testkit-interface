@@ -166,7 +166,7 @@ describe("Reduced-width layout for navigation labels (#189)", () => {
 describe("Visual distinction between required and optional settings (#196)", () => {
   it("displays Required badge and aria-required on required path input", () => {
     render(<App />);
-    const pathInput = screen.getByLabelText(/project or contract path/i);
+    const pathInput = screen.getByLabelText("Project or contract path");
     expect(pathInput).toHaveAttribute("aria-required", "true");
     expect(screen.getAllByText("Required").length).toBeGreaterThanOrEqual(1);
   });
@@ -182,8 +182,8 @@ describe("Visual distinction between required and optional settings (#196)", () 
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: "limits" }));
 
-    const fnInput = screen.getByLabelText(/function/i);
-    const rampInput = screen.getByLabelText(/ramp parameter/i);
+    const fnInput = screen.getByLabelText("Function");
+    const rampInput = screen.getByLabelText("Ramp parameter");
 
     expect(fnInput).toHaveAttribute("aria-required", "true");
     expect(rampInput).toHaveAttribute("aria-required", "true");
@@ -433,5 +433,51 @@ describe("Keyboard-only navigation (#109)", () => {
 
     fireEvent.keyDown(limitsTab, { key: "Home" });
     expect(coverageTab).toHaveAttribute("aria-selected", "true");
+  });
+});
+
+describe("Screen reader semantics (#108)", () => {
+  it("exposes the command selector as a group of toggle buttons rather than a tablist", () => {
+    render(<App />);
+
+    expect(screen.queryByRole("tablist", { name: "Command workflow selector" })).not.toBeInTheDocument();
+    const group = screen.getByRole("group", { name: "Command workflow selector" });
+    expect(within(group).getByRole("button", { name: "coverage" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("names the example terminal as a region so its code is announced with a label", () => {
+    render(<App />);
+
+    expect(screen.getByRole("region", { name: "Example Soroban test" })).toBeInTheDocument();
+  });
+
+  it("gives each clear button a field-specific name", () => {
+    render(<App />);
+    expect(screen.getByRole("button", { name: "Clear project or contract path" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "limits" }));
+    expect(screen.getByRole("button", { name: "Clear function" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Clear ramp parameter" })).toBeInTheDocument();
+  });
+
+  it("announces a successful command copy through a polite live region", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy", exact: true }));
+
+    const announcement = await screen.findByText("Command copied to clipboard");
+    expect(announcement).toHaveAttribute("aria-live", "polite");
+  });
+
+  it("announces which install step was copied", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy step 2 command" }));
+
+    expect(await screen.findByText("Step 2 command copied to clipboard")).toBeInTheDocument();
   });
 });

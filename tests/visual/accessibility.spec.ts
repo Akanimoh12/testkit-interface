@@ -55,3 +55,43 @@ test.describe("keyboard-only navigation (#109)", () => {
     await expect(workspaceTab).toHaveAttribute("aria-selected", "true");
   });
 });
+
+test.describe("screen reader structure (#108)", () => {
+  test("exposes the main landmark, the named navigation, and a single level-one heading", async ({ page }) => {
+    await page.goto("/");
+
+    await expect(page.getByRole("main")).toHaveCount(1);
+    await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+  });
+
+  test("announces the navigation links with their names and targets", async ({ page }) => {
+    await page.goto("/");
+
+    await expect(page.getByRole("navigation", { name: "Main navigation" })).toMatchAriaSnapshot(`
+      - navigation "Main navigation":
+        - link "Soroban Testkit home"
+        - link "Install"
+        - link "Modules"
+        - link "Commands"
+        - link "GitHub ↗"
+    `);
+  });
+
+  test("announces the command selector as a group and the example as a named region", async ({ page }) => {
+    await page.goto("/");
+
+    await expect(page.getByRole("group", { name: "Command workflow selector" })).toBeVisible();
+    await expect(page.getByRole("tablist", { name: "Command workflow selector" })).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Example Soroban test" })).toBeVisible();
+  });
+
+  test("announces the result of copying a command", async ({ page, context }) => {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.goto("/");
+
+    await page.getByRole("button", { name: "Copy", exact: true }).click();
+
+    await expect(page.locator('[aria-live="polite"]').filter({ hasText: "Command copied to clipboard" })).toHaveCount(1);
+  });
+});
