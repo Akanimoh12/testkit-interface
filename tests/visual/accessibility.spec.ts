@@ -160,3 +160,21 @@ test.describe("200% zoom and reflow (#110)", () => {
     }
   }
 });
+
+test.describe("focus return (#111)", () => {
+  // The reset confirmation is a native window.confirm(), not an in-page
+  // dialog. The rule in src/focusReturn.ts is for in-page surfaces, so this
+  // test checks the browser already returns focus to the trigger.
+  for (const outcome of ["accept", "dismiss"] as const) {
+    test(`focus returns to Reset builder after the native reset confirmation is ${outcome}ed`, async ({ page }) => {
+      await page.goto("/");
+      const resetButton = page.getByRole("button", { name: "Reset builder" });
+      await resetButton.focus();
+
+      page.once("dialog", (dialog) => (outcome === "accept" ? dialog.accept() : dialog.dismiss()));
+      await page.keyboard.press("Enter");
+
+      await expect(resetButton).toBeFocused();
+    });
+  }
+});
