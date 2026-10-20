@@ -398,3 +398,40 @@ describe("Repository and installation links (#120, #121, #122)", () => {
     );
   });
 });
+
+describe("Keyboard-only navigation (#109)", () => {
+  it("offers a skip link as the first focusable element that targets the page content", () => {
+    render(<App />);
+
+    const skipLink = screen.getByRole("link", { name: "Skip to main content" });
+    expect(skipLink).toHaveAttribute("href", "#top");
+    expect(document.querySelector("main")?.firstElementChild).toBe(skipLink);
+    expect(document.getElementById("top")).toHaveAttribute("tabindex", "-1");
+  });
+
+  it("moves between workflow tabs with the arrow, Home, and End keys", () => {
+    render(<App />);
+    const coverageTab = screen.getByRole("tab", { name: /coverage workflow/i });
+    const workspaceTab = screen.getByRole("tab", { name: /cargo workspace/i });
+    const limitsTab = screen.getByRole("tab", { name: /resource limits/i });
+
+    coverageTab.focus();
+    fireEvent.keyDown(coverageTab, { key: "ArrowRight" });
+    expect(workspaceTab).toHaveAttribute("aria-selected", "true");
+    expect(workspaceTab).toHaveFocus();
+
+    fireEvent.keyDown(workspaceTab, { key: "End" });
+    expect(limitsTab).toHaveAttribute("aria-selected", "true");
+    expect(limitsTab).toHaveFocus();
+
+    fireEvent.keyDown(limitsTab, { key: "ArrowRight" });
+    expect(coverageTab).toHaveAttribute("aria-selected", "true");
+    expect(coverageTab).toHaveFocus();
+
+    fireEvent.keyDown(coverageTab, { key: "ArrowLeft" });
+    expect(limitsTab).toHaveAttribute("aria-selected", "true");
+
+    fireEvent.keyDown(limitsTab, { key: "Home" });
+    expect(coverageTab).toHaveAttribute("aria-selected", "true");
+  });
+});

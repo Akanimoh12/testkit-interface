@@ -428,6 +428,9 @@ export default function App() {
 
   return (
     <main>
+      <a className="skip-link" href="#top">
+        Skip to main content
+      </a>
       <nav aria-label="Main navigation">
         <a className="brand" href="#top" aria-label="Soroban Testkit home">
           <span className="brand-mark">S</span>
@@ -449,7 +452,7 @@ export default function App() {
         </div>
       </nav>
 
-      <section className="hero" id="top">
+      <section className="hero" id="top" tabIndex={-1}>
         <div>
           <p className="eyebrow">Contract testing, without the repeated scaffolding</p>
           <h1>
